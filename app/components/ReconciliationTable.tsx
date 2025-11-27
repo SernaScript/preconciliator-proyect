@@ -8,7 +8,7 @@ interface ReconciliationTableProps {
 }
 
 export default function ReconciliationTable({ result }: ReconciliationTableProps) {
-  const [activeTab, setActiveTab] = useState<'matched' | 'unmatchedBank' | 'unmatchedERP'>('matched');
+  const [activeTab, setActiveTab] = useState<'matched' | 'unmatchedBank' | 'unmatchedERP' | 'bankExpenses'>('matched');
 
   if (!result) {
     return null;
@@ -18,6 +18,7 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
     { id: 'matched' as const, label: 'Conciliados', count: result.matched.length, color: 'green' },
     { id: 'unmatchedBank' as const, label: 'Pendientes Banco', count: result.unmatchedBank.length, color: 'orange' },
     { id: 'unmatchedERP' as const, label: 'Pendientes ERP', count: result.unmatchedERP.length, color: 'red' },
+    { id: 'bankExpenses' as const, label: 'Gastos Bancarios', count: result.bankExpenses.length, color: 'indigo' },
   ];
 
   const formatDate = (date: Date) => {
@@ -53,7 +54,9 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                       ? 'text-green-600 dark:text-green-400 border-b-2 border-green-500'
                       : tab.color === 'orange'
                       ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-500'
-                      : 'text-red-600 dark:text-red-400 border-b-2 border-red-500'
+                      : tab.color === 'red'
+                      ? 'text-red-600 dark:text-red-400 border-b-2 border-red-500'
+                      : 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                 }
               `}
@@ -68,7 +71,9 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                         ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                         : tab.color === 'orange'
                         ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        : tab.color === 'red'
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                   }
                 `}
@@ -255,6 +260,77 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 ))
               )}
             </tbody>
+          </table>
+        )}
+
+        {activeTab === 'bankExpenses' && (
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Fecha
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Concepto
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Descripción
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Valor
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Cuenta
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {result.bankExpenses.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    No se encontraron gastos bancarios
+                  </td>
+                </tr>
+              ) : (
+                result.bankExpenses.map((expense, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                      {formatDate(expense.fecha)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                      {expense.concepto}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                      {expense.descripcion}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {formatCurrency(expense.valor)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {expense.cuenta}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {result.bankExpenses.length > 0 && (
+              <tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
+                <tr>
+                  <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">
+                    Total Gastos Bancarios:
+                  </td>
+                  <td className="px-4 py-3 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                    {formatCurrency(
+                      result.bankExpenses.reduce((sum, expense) => sum + Math.abs(expense.valor), 0)
+                    )}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         )}
       </div>

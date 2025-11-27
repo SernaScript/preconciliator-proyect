@@ -42,6 +42,12 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       color: 'text-red-600 dark:text-red-400',
       bgColor: 'bg-red-50 dark:bg-red-900/20',
     },
+    {
+      label: 'Gastos Bancarios',
+      value: stats.bankExpenses || 0,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+    },
   ];
 
   return (
@@ -49,13 +55,13 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         Estadísticas de Conciliación
       </h3>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {statsItems.map((item, index) => (
           <div
             key={index}
             className={`${item.bgColor} rounded-lg p-4 text-center transition-transform hover:scale-105`}
           >
-            <p className="text-2xl font-bold ${item.color} mb-1">{item.value}</p>
+            <p className={`text-2xl font-bold ${item.color} mb-1`}>{item.value}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400">{item.label}</p>
           </div>
         ))}
@@ -77,6 +83,22 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
             </span>
           </div>
         </div>
+        {stats.bankExpensesTotal !== undefined && stats.bankExpensesTotal > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Total Gastos Bancarios
+              </span>
+              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                {new Intl.NumberFormat('es-CO', {
+                  style: 'currency',
+                  currency: 'COP',
+                  minimumFractionDigits: 2,
+                }).format(stats.bankExpensesTotal)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,33 @@ export interface BankTransaction {
   codigo: string;
   descripcion: string;
   originalIndex: number;
+  isBankExpense?: boolean; // Indica si es un gasto bancario
+}
+
+// Lista de conceptos de gastos bancarios
+export const BANK_EXPENSE_CONCEPTS = [
+  'ABONO INTERESES AHORROS',
+  'COBRO IVA PAGOS AUTOMATICOS',
+  'COMIS TRASLADO EN SUCURSAL',
+  'CUOTA MANEJO CUPO ROTATIVO',
+  'CUOTA PLAN CANAL NEGOCIOS',
+  'CXC IMPTO GOBIERNO 4X1000 MON',
+  'IMPTO GOBIERNO 4X1000',
+  'IVA CUOTA MANEJO CUPO ROTATIVO',
+  'IVA CUOTA PLAN CANAL NEGOCIOS',
+  'PAGO CXC DESDE CTA 39900001230',
+  'SERVICIO PAGO A OTROS BANCOS',
+  'SERVICIO PAGO A PROVEEDORES',
+  'VALOR IVA',
+];
+
+/**
+ * Verifica si una transacción bancaria es un gasto bancario
+ * basándose en la descripción
+ */
+export function isBankExpense(transaction: BankTransaction): boolean {
+  const descripcion = transaction.descripcion.toUpperCase().trim();
+  return BANK_EXPENSE_CONCEPTS.some(concept => descripcion.includes(concept));
 }
 
 export interface ERPTransaction {
@@ -77,15 +104,20 @@ export async function parseCSV(file: File): Promise<BankTransaction[]> {
                 return; // Valor inválido
               }
 
-              transactions.push({
-                cuenta,
-                iniciales,
-                fecha,
-                valor,
-                codigo,
-                descripcion,
-                originalIndex: index,
-              });
+            const transaction: BankTransaction = {
+              cuenta,
+              iniciales,
+              fecha,
+              valor,
+              codigo,
+              descripcion,
+              originalIndex: index,
+            };
+            
+            // Marcar si es un gasto bancario
+            transaction.isBankExpense = isBankExpense(transaction);
+            
+            transactions.push(transaction);
             });
 
             resolve(transactions);
@@ -95,7 +127,7 @@ export async function parseCSV(file: File): Promise<BankTransaction[]> {
             reject(new Error(errorMessage));
           }
         },
-        error: (error) => {
+        error: (error: Error) => {
           const errorMessage = `Error al leer CSV: ${error.message}`;
           console.error(errorMessage, error);
           reject(new Error(errorMessage));

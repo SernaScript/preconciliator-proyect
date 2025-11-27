@@ -1,4 +1,4 @@
-import { BankTransaction, ERPTransaction } from './fileParser';
+import { BankTransaction, ERPTransaction, isBankExpense, BANK_EXPENSE_CONCEPTS } from './fileParser';
 
 export interface IndexedTransaction {
   index: string;
@@ -11,16 +11,27 @@ export interface ReconciliationMatch {
   difference: number;
 }
 
+export interface BankExpense {
+  fecha: Date;
+  valor: number;
+  descripcion: string;
+  concepto: string;
+  cuenta: string;
+}
+
 export interface ReconciliationResult {
   matched: ReconciliationMatch[];
   unmatchedBank: BankTransaction[];
   unmatchedERP: ERPTransaction[];
+  bankExpenses: BankExpense[]; // Gastos bancarios identificados
   stats: {
     totalBank: number;
     totalERP: number;
     matched: number;
     unmatchedBank: number;
     unmatchedERP: number;
+    bankExpenses: number;
+    bankExpensesTotal: number;
     matchPercentage: number;
   };
 }
@@ -115,10 +126,37 @@ export function reconcile(
   useDate: boolean,
   tolerance: number = 0
 ): ReconciliationResult {
-  // Crear índices según el modo
+  // Separar gastos bancarios de las transacciones normales
+  const bankExpenses: BankExpense[] = [];
+  const regularBankTransactions: BankTransaction[] = [];
+  
+  bankTransactions.forEach(transaction => {
+    if (transaction.isBankExpense) {
+      // Identificar el concepto del gasto bancario
+      const descripcion = transaction.descripcion.toUpperCase().trim();
+      const concepto = BANK_EXPENSE_CONCEPTS.find(concept => 
+        descripcion.includes(concept)
+      ) || 'OTRO GASTO BANCARIO';
+      
+      bankExpenses.push({
+        fecha: transaction.fecha,
+        valor: transaction.valor,
+        descripcion: transaction.descripcion,
+        concepto,
+        cuenta: transaction.cuenta,
+      });
+    } else {
+      regularBankTransactions.push(transaction);
+    }
+  });
+  
+  // Calcular total de gastos bancarios
+  const bankExpensesTotal = bankExpenses.reduce((sum, expense) => sum + Math.abs(expense.valor), 0);
+  
+  // Crear índices según el modo (solo con transacciones regulares, sin gastos bancarios)
   const bankIndexed = useDate 
-    ? indexByValueAndDate(bankTransactions)
-    : indexByValue(bankTransactions);
+    ? indexByValueAndDate(regularBankTransactions)
+    : indexByValue(regularBankTransactions);
   
   const erpIndexed = useDate
     ? indexByValueAndDate(erpTransactions)
@@ -188,8 +226,8 @@ export function reconcile(
     }
   });
   
-  // Obtener transacciones no conciliadas
-  const unmatchedBank = bankTransactions.filter(
+  // Obtener transacciones no conciliadas (solo las regulares, sin gastos bancarios)
+  const unmatchedBank = regularBankTransactions.filter(
     t => !matchedBankIndices.has(t.originalIndex)
   );
   
@@ -198,25 +236,32 @@ export function reconcile(
   );
   
   // Calcular estadísticas
-  const totalBank = bankTransactions.length;
+  const totalBank = bankTransactions.length; // Total incluyendo gastos bancarios
+  const totalRegularBank = regularBankTransactions.length; // Solo transacciones regulares
   const totalERP = erpTransactions.length;
   const matchedCount = matched.length;
   const unmatchedBankCount = unmatchedBank.length;
   const unmatchedERPCount = unmatchedERP.length;
-  const matchPercentage = totalBank > 0 
-    ? (matchedCount / totalBank) * 100 
+  const bankExpensesCount = bankExpenses.length;
+  
+  // El porcentaje de conciliación se calcula sobre las transacciones regulares (sin gastos bancarios)
+  const matchPercentage = totalRegularBank > 0 
+    ? (matchedCount / totalRegularBank) * 100 
     : 0;
   
   return {
     matched,
     unmatchedBank,
     unmatchedERP,
+    bankExpenses,
     stats: {
       totalBank,
       totalERP,
       matched: matchedCount,
       unmatchedBank: unmatchedBankCount,
       unmatchedERP: unmatchedERPCount,
+      bankExpenses: bankExpensesCount,
+      bankExpensesTotal: Math.round(bankExpensesTotal * 100) / 100,
       matchPercentage: Math.round(matchPercentage * 100) / 100,
     },
   };

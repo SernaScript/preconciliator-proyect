@@ -98,6 +98,29 @@ export default function Home() {
       const unmatchedERPSheet = XLSX.utils.json_to_sheet(unmatchedERPData);
       XLSX.utils.book_append_sheet(workbook, unmatchedERPSheet, 'Pendientes ERP');
 
+      // Hoja de gastos bancarios
+      const bankExpensesData = result.bankExpenses.map((expense) => ({
+        'Fecha': new Date(expense.fecha).toLocaleDateString('es-ES'),
+        'Concepto': expense.concepto,
+        'Descripción': expense.descripcion,
+        'Valor': expense.valor,
+        'Cuenta': expense.cuenta,
+      }));
+      
+      // Agregar fila de total
+      if (bankExpensesData.length > 0) {
+        bankExpensesData.push({
+          'Fecha': '',
+          'Concepto': 'TOTAL',
+          'Descripción': '',
+          'Valor': result.bankExpenses.reduce((sum, expense) => sum + Math.abs(expense.valor), 0),
+          'Cuenta': '',
+        });
+      }
+      
+      const bankExpensesSheet = XLSX.utils.json_to_sheet(bankExpensesData);
+      XLSX.utils.book_append_sheet(workbook, bankExpensesSheet, 'Gastos Bancarios');
+
       // Hoja de estadísticas
       const statsData = [
         { 'Métrica': 'Total Extracto Bancario', 'Valor': result.stats.totalBank },
@@ -105,6 +128,8 @@ export default function Home() {
         { 'Métrica': 'Conciliados', 'Valor': result.stats.matched },
         { 'Métrica': 'Pendientes Banco', 'Valor': result.stats.unmatchedBank },
         { 'Métrica': 'Pendientes ERP', 'Valor': result.stats.unmatchedERP },
+        { 'Métrica': 'Gastos Bancarios', 'Valor': result.stats.bankExpenses || 0 },
+        { 'Métrica': 'Total Gastos Bancarios', 'Valor': result.stats.bankExpensesTotal || 0 },
         { 'Métrica': 'Porcentaje de Conciliación', 'Valor': `${result.stats.matchPercentage}%` },
       ];
       const statsSheet = XLSX.utils.json_to_sheet(statsData);
