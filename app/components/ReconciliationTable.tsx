@@ -38,9 +38,9 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div className="border-b border-gray-200">
         <div className="flex overflow-x-auto">
           {tabs.map((tab) => (
             <button
@@ -51,13 +51,13 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 ${
                   activeTab === tab.id
                     ? tab.color === 'green'
-                      ? 'text-green-600 dark:text-green-400 border-b-2 border-green-500'
+                      ? 'text-green-600 border-b-2 border-green-500'
                       : tab.color === 'orange'
-                      ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-500'
+                      ? 'text-orange-600 border-b-2 border-orange-500'
                       : tab.color === 'red'
-                      ? 'text-red-600 dark:text-red-400 border-b-2 border-red-500'
-                      : 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      ? 'text-red-600 border-b-2 border-red-500'
+                      : 'text-orange-500 border-b-2 border-orange-500'
+                    : 'text-gray-500 hover:text-gray-700'
                 }
               `}
             >
@@ -68,13 +68,13 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                   ${
                     activeTab === tab.id
                       ? tab.color === 'green'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                        ? 'bg-green-100 text-green-700'
                         : tab.color === 'orange'
-                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ? 'bg-orange-100 text-orange-700'
                         : tab.color === 'red'
-                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-orange-100 text-orange-700'
+                      : 'bg-gray-100 text-gray-600'
                   }
                 `}
               >
@@ -89,35 +89,35 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
       <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
         {activeTab === 'matched' && (
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
+            <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha Banco
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor Banco
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descripción Banco
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha ERP
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor ERP
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tercero ERP
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Diferencia
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white divide-y divide-gray-200">
               {result.matched.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                     No hay transacciones conciliadas
                   </td>
                 </tr>
@@ -125,32 +125,32 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 result.matched.map((match, index) => (
                   <tr
                     key={index}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(match.bankTransaction.fecha)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(match.bankTransaction.valor)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {match.bankTransaction.descripcion}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(match.erpTransaction.fechaElaboracion)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(match.erpTransaction.valor)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {match.erpTransaction.nombreTercero}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
                           match.difference === 0
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
                         }`}
                       >
                         {formatCurrency(match.difference)}
@@ -167,21 +167,21 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Cuenta
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descripción
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white divide-y divide-gray-200">
               {result.unmatchedBank.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -192,18 +192,18 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 result.unmatchedBank.map((transaction, index) => (
                   <tr
                     key={index}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(transaction.fecha)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(transaction.valor)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {transaction.cuenta}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {transaction.descripcion}
                     </td>
                   </tr>
@@ -217,21 +217,21 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Comprobante
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tercero
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white divide-y divide-gray-200">
               {result.unmatchedERP.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -242,18 +242,18 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 result.unmatchedERP.map((transaction, index) => (
                   <tr
                     key={index}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(transaction.fechaElaboracion)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(transaction.valor)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {transaction.comprobante}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {transaction.nombreTercero}
                     </td>
                   </tr>
@@ -267,24 +267,24 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Concepto
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descripción
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Valor
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Cuenta
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white divide-y divide-gray-200">
               {result.bankExpenses.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
@@ -295,18 +295,18 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                 result.bankExpenses.map((expense, index) => (
                   <tr
                     key={index}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    className="hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(expense.fecha)}
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                    <td className="px-4 py-3 text-sm font-medium text-orange-600">
                       {expense.concepto}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">
                       {expense.descripcion}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {formatCurrency(expense.valor)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -317,12 +317,12 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
               )}
             </tbody>
             {result.bankExpenses.length > 0 && (
-              <tfoot className="bg-indigo-50 dark:bg-indigo-900/20">
+              <tfoot className="bg-orange-50">
                 <tr>
-                  <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">
+                  <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
                     Total Gastos Bancarios:
                   </td>
-                  <td className="px-4 py-3 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                  <td className="px-4 py-3 text-sm font-bold text-orange-600">
                     {formatCurrency(
                       result.bankExpenses.reduce((sum, expense) => sum + Math.abs(expense.valor), 0)
                     )}

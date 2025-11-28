@@ -51,8 +51,8 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
   ];
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+    <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">
         Estadísticas de Conciliación
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -66,30 +66,30 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
           </div>
         ))}
       </div>
-      <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-6 pt-6 border-t border-gray-200">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          <span className="text-sm font-medium text-gray-700">
             Porcentaje de Conciliación
           </span>
           <div className="flex items-center gap-3">
-            <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-32 h-3 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-500"
+                className="h-full bg-orange-500 transition-all duration-500"
                 style={{ width: `${stats.matchPercentage}%` }}
               />
             </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+            <span className="text-lg font-bold text-gray-800">
               {stats.matchPercentage.toFixed(1)}%
             </span>
           </div>
         </div>
         {stats.bankExpensesTotal !== undefined && stats.bankExpensesTotal > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-sm font-medium text-gray-700">
                 Total Gastos Bancarios
               </span>
-              <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+              <span className="text-lg font-bold text-orange-500">
                 {new Intl.NumberFormat('es-CO', {
                   style: 'currency',
                   currency: 'COP',

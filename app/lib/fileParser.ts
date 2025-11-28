@@ -250,14 +250,37 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       
       // Leer todas las columnas de la fila directamente
       // Cada columna del Excel corresponde a una posición en el array
-      const dataRow = row.map(cell => {
-        // Si la celda es un objeto (fecha de Excel), convertirla
-        if (cell && typeof cell === 'object') {
-          // Intentar obtener el valor como string
-          return String(cell.w || cell.v || cell || '').trim();
+      const dataRow: (string | Date)[] = [];
+      
+      for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
+        const cell = row[cellIndex];
+        
+        // Si es la columna de fecha (índice 4), manejar especialmente
+        if (cellIndex === 4) {
+          // Si es un número serial de Excel (fecha), convertirla
+          if (typeof cell === 'number') {
+            // Excel almacena fechas como números seriales desde 1900-01-01
+            const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899
+            const date = new Date(excelEpoch.getTime() + cell * 86400000);
+            if (!isNaN(date.getTime())) {
+              dataRow.push(date); // Guardar como Date para parsear después
+              continue;
+            }
+          }
+          // Si es un objeto Date
+          if (cell instanceof Date) {
+            dataRow.push(cell);
+            continue;
+          }
         }
-        return String(cell || '').trim();
-      });
+        
+        // Si la celda es un objeto, intentar obtener el valor como string
+        if (cell && typeof cell === 'object' && !(cell instanceof Date)) {
+          dataRow.push(String(cell.w || cell.v || cell || '').trim());
+        } else {
+          dataRow.push(String(cell || '').trim());
+        }
+      }
       
       // Validar que tengamos suficientes columnas
       if (dataRow.length < 14) {
@@ -272,14 +295,14 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       // Índices: 0=Código contable, 1=Cuenta contable, 2=Comprobante, 3=Secuencia, 4=Fecha elaboración, 
       // 5=Identificación, 6=Sucursal, 7=Nombre del tercero, 8=Descripción, 9=Detalle, 
       // 10=Centro de costo, 11=Saldo inicial, 12=Débito, 13=Crédito, 14=Saldo Movimiento, 15=Saldo total cuenta
-      const fechaElaboracionStr = dataRow[4]?.trim() || '';
-      const comprobante = dataRow[2]?.trim() || '';
-      const nombreTercero = dataRow[7]?.trim() || '';
-      const debitoStr = dataRow[12]?.trim() || '0';
-      const creditoStr = dataRow[13]?.trim() || '0';
+      const fechaElaboracionValue = dataRow[4];
+      const comprobante = String(dataRow[2] || '').trim();
+      const nombreTercero = String(dataRow[7] || '').trim();
+      const debitoStr = String(dataRow[12] || '0').trim();
+      const creditoStr = String(dataRow[13] || '0').trim();
       
       // Validar campos esenciales
-      if (!fechaElaboracionStr) {
+      if (!fechaElaboracionValue) {
         rowsWithErrors++;
         if (rowsWithErrors <= 3) {
           errors.push(`Fila ${i + 1}: Falta la fecha de elaboración (columna 5).`);
@@ -287,32 +310,59 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         continue;
       }
       
-      // Parsear fecha (puede venir en varios formatos)
+      // Parsear fecha (formato esperado: dd/mm/yyyy o Date object)
       let fechaElaboracion: Date;
       try {
-        // Intentar parsear como fecha
-        const fechaParsed = new Date(fechaElaboracionStr);
-        if (!isNaN(fechaParsed.getTime())) {
-          fechaElaboracion = fechaParsed;
+        // Si ya es un objeto Date, usarlo directamente
+        if (fechaElaboracionValue instanceof Date) {
+          fechaElaboracion = fechaElaboracionValue;
         } else {
-          // Intentar formato YYYYMMDD
-          if (fechaElaboracionStr.length === 8 && /^\d+$/.test(fechaElaboracionStr)) {
-            const year = parseInt(fechaElaboracionStr.substring(0, 4));
-            const month = parseInt(fechaElaboracionStr.substring(4, 6)) - 1;
-            const day = parseInt(fechaElaboracionStr.substring(6, 8));
+          // Convertir a string para parsear
+          const fechaElaboracionStr = String(fechaElaboracionValue).trim();
+          
+          // Primero intentar parsear formato dd/mm/yyyy
+          const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+          const match = fechaElaboracionStr.match(datePattern);
+          
+          if (match) {
+            const day = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed en JavaScript
+            const year = parseInt(match[3], 10);
             fechaElaboracion = new Date(year, month, day);
-          } else {
-            rowsWithInvalidDate++;
-            if (rowsWithInvalidDate <= 3) {
-              errors.push(`Fila ${i + 1}: Fecha inválida "${fechaElaboracionStr}". Se espera formato de fecha válido o YYYYMMDD.`);
+            
+            // Validar que la fecha sea válida
+            if (isNaN(fechaElaboracion.getTime()) || 
+                fechaElaboracion.getDate() !== day || 
+                fechaElaboracion.getMonth() !== month || 
+                fechaElaboracion.getFullYear() !== year) {
+              throw new Error('Fecha inválida');
             }
-            continue; // Fecha inválida
+          } else {
+            // Si no coincide con dd/mm/yyyy, intentar otros formatos
+            // Intentar parsear como fecha estándar
+            const fechaParsed = new Date(fechaElaboracionStr);
+            if (!isNaN(fechaParsed.getTime())) {
+              fechaElaboracion = fechaParsed;
+            } else {
+              // Intentar formato YYYYMMDD como último recurso
+              if (fechaElaboracionStr.length === 8 && /^\d+$/.test(fechaElaboracionStr)) {
+                const year = parseInt(fechaElaboracionStr.substring(0, 4));
+                const month = parseInt(fechaElaboracionStr.substring(4, 6)) - 1;
+                const day = parseInt(fechaElaboracionStr.substring(6, 8));
+                fechaElaboracion = new Date(year, month, day);
+              } else {
+                throw new Error('Formato de fecha no reconocido');
+              }
+            }
           }
         }
-      } catch {
+      } catch (error) {
         rowsWithInvalidDate++;
         if (rowsWithInvalidDate <= 3) {
-          errors.push(`Fila ${i + 1}: Error al parsear la fecha "${fechaElaboracionStr}".`);
+          const fechaStr = fechaElaboracionValue instanceof Date 
+            ? fechaElaboracionValue.toLocaleDateString('es-ES')
+            : String(fechaElaboracionValue);
+          errors.push(`Fila ${i + 1}: Fecha inválida "${fechaStr}". Se espera formato dd/mm/yyyy.`);
         }
         continue; // Error al parsear fecha
       }

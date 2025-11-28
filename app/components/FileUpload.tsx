@@ -38,19 +38,19 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
 
   return (
     <div className="w-full">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
         {label}
       </label>
       <div
         {...getRootProps()}
         className={`
-          relative border-2 border-dashed rounded-lg p-6 transition-all duration-200 cursor-pointer
+          relative border-2 border-dashed rounded-lg p-6 transition-all duration-200 cursor-pointer bg-white
           ${isDragActive || isDragging
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+            ? 'border-orange-500 bg-orange-50'
+            : 'border-gray-300 hover:border-gray-400'
           }
-          ${error ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : ''}
-          ${file ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : ''}
+          ${error ? 'border-red-500 bg-red-50' : ''}
+          ${file ? 'bg-green-50 border-green-500' : ''}
         `}
       >
         <input {...getInputProps()} />
@@ -70,15 +70,15 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+              <p className="text-sm font-medium text-gray-900 mb-1">
                 {file.name}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p className="text-xs text-gray-500 mb-2">
                 {(file.size / 1024).toFixed(2)} KB
               </p>
               <button
                 onClick={handleRemove}
-                className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium"
+                className="text-xs text-red-600 hover:text-red-800 font-medium"
               >
                 Eliminar archivo
               </button>
@@ -98,12 +98,12 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
                   d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                 />
               </svg>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+              <p className="text-sm text-gray-600 mb-1">
                 {isDragActive
                   ? 'Suelta el archivo aquí'
                   : 'Arrastra y suelta el archivo aquí, o haz clic para seleccionar'}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500">
+              <p className="text-xs text-gray-500">
                 {accept === '.csv' ? 'CSV' : 'Excel (.xlsx, .xls)'}
               </p>
             </>
@@ -111,7 +111,7 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
         </div>
       </div>
       {error && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+        <p className="mt-2 text-sm text-red-600">{error}</p>
       )}
     </div>
   );
