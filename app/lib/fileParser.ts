@@ -1,6 +1,8 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
+export type BankType = 'bancolombia' | 'banco_occidente' | 'banco_bogota' | 'davivienda';
+
 export interface BankTransaction {
   cuenta: string;
   iniciales: string;
@@ -50,10 +52,10 @@ export interface ERPTransaction {
 
 /**
  * Parsea un archivo CSV del extracto bancario
- * Formato: cuenta, iniciales, , fecha(YYYYMMDD), , valor, código, descripción, verificado
+ * Formato Bancolombia: cuenta, iniciales, , fecha(YYYYMMDD), , valor, código, descripción, verificado
  * Posiciones: [0]=cuenta, [1]=iniciales, [3]=fecha, [5]=valor, [6]=código, [7]=descripción
  */
-export async function parseCSV(file: File): Promise<BankTransaction[]> {
+export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): Promise<BankTransaction[]> {
   try {
     // Convertir File a texto para usar en Node.js
     const text = await file.text();
@@ -66,58 +68,14 @@ export async function parseCSV(file: File): Promise<BankTransaction[]> {
           try {
             const transactions: BankTransaction[] = [];
             
+            // Seleccionar el parser según el banco
+            const parseRow = getBankParser(bankType);
+            
             results.data.forEach((row: any, index: number) => {
-              if (!Array.isArray(row) || row.length < 8) {
-                return; // Saltar filas inválidas
+              const transaction = parseRow(row, index);
+              if (transaction) {
+                transactions.push(transaction);
               }
-
-              const cuenta = String(row[0] || '').trim();
-              const iniciales = String(row[1] || '').trim();
-              const fechaStr = String(row[3] || '').trim();
-              const valorStr = String(row[5] || '').trim();
-              const codigo = String(row[6] || '').trim();
-              const descripcion = String(row[7] || '').trim();
-
-              // Validar que tengamos los campos esenciales
-              if (!fechaStr || !valorStr) {
-                return;
-              }
-
-              // Parsear fecha YYYYMMDD
-              let fecha: Date;
-              try {
-                const year = parseInt(fechaStr.substring(0, 4));
-                const month = parseInt(fechaStr.substring(4, 6)) - 1; // Mes es 0-indexed
-                const day = parseInt(fechaStr.substring(6, 8));
-                fecha = new Date(year, month, day);
-                
-                if (isNaN(fecha.getTime())) {
-                  return; // Fecha inválida
-                }
-              } catch {
-                return; // Error al parsear fecha
-              }
-
-              // Parsear valor
-              const valor = parseFloat(valorStr.replace(/,/g, ''));
-              if (isNaN(valor)) {
-                return; // Valor inválido
-              }
-
-            const transaction: BankTransaction = {
-              cuenta,
-              iniciales,
-              fecha,
-              valor,
-              codigo,
-              descripcion,
-              originalIndex: index,
-            };
-            
-            // Marcar si es un gasto bancario
-            transaction.isBankExpense = isBankExpense(transaction);
-            
-            transactions.push(transaction);
             });
 
             resolve(transactions);
@@ -139,6 +97,113 @@ export async function parseCSV(file: File): Promise<BankTransaction[]> {
     console.error(errorMessage, error);
     throw new Error(errorMessage);
   }
+}
+
+/**
+ * Obtiene el parser específico para cada banco
+ */
+function getBankParser(bankType: BankType) {
+  switch (bankType) {
+    case 'bancolombia':
+      return parseBancolombiaRow;
+    case 'banco_occidente':
+      return parseBancoOccidenteRow;
+    case 'banco_bogota':
+      return parseBancoBogotaRow;
+    case 'davivienda':
+      return parseDaviviendaRow;
+    default:
+      return parseBancolombiaRow;
+  }
+}
+
+/**
+ * Parsea una fila del formato Bancolombia
+ * Formato: cuenta, iniciales, , fecha(YYYYMMDD), , valor, código, descripción, verificado
+ * Posiciones: [0]=cuenta, [1]=iniciales, [3]=fecha, [5]=valor, [6]=código, [7]=descripción
+ */
+function parseBancolombiaRow(row: any, index: number): BankTransaction | null {
+  if (!Array.isArray(row) || row.length < 8) {
+    return null; // Saltar filas inválidas
+  }
+
+  const cuenta = String(row[0] || '').trim();
+  const iniciales = String(row[1] || '').trim();
+  const fechaStr = String(row[3] || '').trim();
+  const valorStr = String(row[5] || '').trim();
+  const codigo = String(row[6] || '').trim();
+  const descripcion = String(row[7] || '').trim();
+
+  // Validar que tengamos los campos esenciales
+  if (!fechaStr || !valorStr) {
+    return null;
+  }
+
+  // Parsear fecha YYYYMMDD
+  let fecha: Date;
+  try {
+    const year = parseInt(fechaStr.substring(0, 4));
+    const month = parseInt(fechaStr.substring(4, 6)) - 1; // Mes es 0-indexed
+    const day = parseInt(fechaStr.substring(6, 8));
+    fecha = new Date(year, month, day);
+    
+    if (isNaN(fecha.getTime())) {
+      return null; // Fecha inválida
+    }
+  } catch {
+    return null; // Error al parsear fecha
+  }
+
+  // Parsear valor
+  const valor = parseFloat(valorStr.replace(/,/g, ''));
+  if (isNaN(valor)) {
+    return null; // Valor inválido
+  }
+
+  const transaction: BankTransaction = {
+    cuenta,
+    iniciales,
+    fecha,
+    valor,
+    codigo,
+    descripcion,
+    originalIndex: index,
+  };
+  
+  // Marcar si es un gasto bancario
+  transaction.isBankExpense = isBankExpense(transaction);
+  
+  return transaction;
+}
+
+/**
+ * Parsea una fila del formato Banco de Occidente
+ * TODO: Implementar cuando se conozca el formato específico
+ */
+function parseBancoOccidenteRow(row: any, index: number): BankTransaction | null {
+  // Por ahora, usar el mismo formato que Bancolombia
+  // TODO: Ajustar según el formato real del Banco de Occidente
+  return parseBancolombiaRow(row, index);
+}
+
+/**
+ * Parsea una fila del formato Banco de Bogotá
+ * TODO: Implementar cuando se conozca el formato específico
+ */
+function parseBancoBogotaRow(row: any, index: number): BankTransaction | null {
+  // Por ahora, usar el mismo formato que Bancolombia
+  // TODO: Ajustar según el formato real del Banco de Bogotá
+  return parseBancolombiaRow(row, index);
+}
+
+/**
+ * Parsea una fila del formato Davivienda
+ * TODO: Implementar cuando se conozca el formato específico
+ */
+function parseDaviviendaRow(row: any, index: number): BankTransaction | null {
+  // Por ahora, usar el mismo formato que Bancolombia
+  // TODO: Ajustar según el formato real de Davivienda
+  return parseBancolombiaRow(row, index);
 }
 
 /**

@@ -5,9 +5,12 @@ import FileUpload from './components/FileUpload';
 import ConfigPanel from './components/ConfigPanel';
 import StatsPanel from './components/StatsPanel';
 import ReconciliationTable from './components/ReconciliationTable';
+import BankSelector from './components/BankSelector';
 import { ReconciliationResult } from './lib/reconciliation';
+import { BankType } from './lib/fileParser';
 
 export default function Home() {
+  const [selectedBank, setSelectedBank] = useState<BankType>('bancolombia');
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [useDate, setUseDate] = useState(false);
@@ -32,6 +35,7 @@ export default function Home() {
       formData.append('excelFile', excelFile);
       formData.append('useDate', String(useDate));
       formData.append('tolerance', String(tolerance));
+      formData.append('bankType', selectedBank);
 
       const response = await fetch('/api/reconcile', {
         method: 'POST',
@@ -165,43 +169,22 @@ export default function Home() {
 
       <div className="container mx-auto px-6 py-12 max-w-7xl">
         {/* Hero Section */}
-        <div className="text-center mb-16">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Sistema de Conciliación Bancaria
-          </div>
-
-          {/* Main Title */}
-          <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            <span className="text-gray-800">Portal de </span>
-            <span className="text-orange-500">Conciliación</span>
-          </h1>
-
-          {/* Description */}
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8 leading-relaxed">
-            Plataforma para conciliar extractos bancarios con movimientos contables de forma rápida, 
-            precisa y automatizada. Gestiona tus conciliaciones, identifica diferencias y exporta 
-            resultados detallados.
-          </p>
-        </div>
+        
 
         {/* Main Content */}
-        <div className="max-w-5xl mx-auto">
-          {/* File Upload Section */}
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="grid lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {/* Left Sidebar - Bank Selector */}
+          <div className="lg:col-span-1">
+            <BankSelector
+              selectedBank={selectedBank}
+              onBankChange={setSelectedBank}
+            />
+          </div>
+
+          {/* Right Content */}
+          <div className="lg:col-span-3">
+            {/* File Upload Section */}
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
             <FileUpload
               label="Extracto Bancario (CSV)"
               accept=".csv"
@@ -349,20 +332,15 @@ export default function Home() {
               <ReconciliationTable result={result} />
             </>
           )}
+          </div>
         </div>
 
-        {/* Features Section */}
+        {/* Guía de Conciliación */}
         {!result && (
-          <div className="mt-20 text-center">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">
-              Funcionalidades del Portal
-            </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto mb-12">
-              Herramientas para gestionar eficientemente tus conciliaciones bancarias
-            </p>
-            <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-              <div className="bg-white p-6 rounded-lg border border-gray-200">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+          <div className="mt-12 max-w-4xl mx-auto">
+            <div className="bg-white rounded-lg shadow-md p-8 border border-gray-200">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
                   <svg
                     className="w-6 h-6 text-orange-500"
                     fill="none"
@@ -373,56 +351,85 @@ export default function Home() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
                     />
                   </svg>
                 </div>
-                <h3 className="font-semibold text-gray-800 mb-2">Conciliación Automática</h3>
-                <p className="text-sm text-gray-600">
-                  Concilia por valores o por valores y fechas con tolerancia configurable
-                </p>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  Guía de Conciliación
+                </h2>
               </div>
-              <div className="bg-white p-6 rounded-lg border border-gray-200">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <svg
-                    className="w-6 h-6 text-orange-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
+              
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    1
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Selecciona el Banco
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Elige el banco del extracto bancario que vas a conciliar (Bancolombia, Banco de Occidente, Banco de Bogotá o Davivienda).
+                    </p>
+                  </div>
                 </div>
-                <h3 className="font-semibold text-gray-800 mb-2">Gastos Bancarios</h3>
-                <p className="text-sm text-gray-600">
-                  Identifica y consolida automáticamente los gastos bancarios
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg border border-gray-200">
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
-                  <svg
-                    className="w-6 h-6 text-orange-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    2
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Sube los Archivos
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Carga el extracto bancario en formato CSV y el archivo de movimientos del ERP en formato Excel (.xlsx o .xls).
+                    </p>
+                  </div>
                 </div>
-                <h3 className="font-semibold text-gray-800 mb-2">Exportación a Excel</h3>
-                <p className="text-sm text-gray-600">
-                  Exporta resultados completos con múltiples hojas organizadas
-                </p>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    3
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Configura la Conciliación
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Elige el modo de conciliación: <strong>Solo Valores</strong> (concilia únicamente por monto) o <strong>Valores + Fechas</strong> (requiere coincidencia de monto y fecha). Establece una tolerancia si necesitas permitir pequeñas diferencias.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    4
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Ejecuta la Conciliación
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Haz clic en "Ejecutar Conciliación" para procesar los archivos. El sistema identificará automáticamente las transacciones conciliadas, pendientes y gastos bancarios.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    5
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-800 mb-2">
+                      Revisa y Exporta
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Revisa los resultados en las tablas y exporta el reporte completo a Excel con todas las hojas: conciliados, pendientes del banco, pendientes del ERP y gastos bancarios.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseCSV, parseExcel } from '@/app/lib/fileParser';
+import { parseCSV, parseExcel, BankType } from '@/app/lib/fileParser';
 import { reconcile, ReconciliationResult } from '@/app/lib/reconciliation';
 
 export async function POST(request: NextRequest) {
@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     const excelFile = formData.get('excelFile') as File;
     const useDate = formData.get('useDate') === 'true';
     const tolerance = parseFloat(formData.get('tolerance') as string) || 0;
+    const bankType = (formData.get('bankType') as BankType) || 'bancolombia';
     
     if (!csvFile || !excelFile) {
       const error = 'Se requieren ambos archivos (CSV y Excel)';
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     let erpTransactions;
     
     try {
-      bankTransactions = await parseCSV(csvFile);
+      bankTransactions = await parseCSV(csvFile, bankType);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Error desconocido al procesar CSV';
       console.error('Error al parsear CSV:', errorMsg);
