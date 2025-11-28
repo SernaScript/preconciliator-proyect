@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseCSV, parseExcel, BankType } from '@/app/lib/fileParser';
+import { parseCSV, parseExcel, parseExcelBank, BankType } from '@/app/lib/fileParser';
 import { reconcile, ReconciliationResult } from '@/app/lib/reconciliation';
 
 export async function POST(request: NextRequest) {
@@ -21,18 +21,29 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Validar tipos de archivo
-    const csvFileName = csvFile.name.toLowerCase();
-    const isValidBankFile = csvFileName.endsWith('.csv') || 
-                           (bankType === 'banco_bogota' && csvFileName.endsWith('.txt'));
+    // Validar tipos de archivo según el banco
+    const bankFileName = csvFile.name.toLowerCase();
+    let isValidBankFile = false;
+    let bankFileError = '';
+    
+    if (bankType === 'davivienda') {
+      // Davivienda usa Excel
+      isValidBankFile = bankFileName.endsWith('.xlsx') || bankFileName.endsWith('.xls');
+      bankFileError = 'El archivo del extracto bancario de Davivienda debe ser Excel (.xlsx o .xls)';
+    } else if (bankType === 'banco_bogota') {
+      // Banco de Bogotá usa CSV o TXT
+      isValidBankFile = bankFileName.endsWith('.csv') || bankFileName.endsWith('.txt');
+      bankFileError = 'El archivo del extracto bancario debe ser CSV o TXT';
+    } else {
+      // Otros bancos usan CSV
+      isValidBankFile = bankFileName.endsWith('.csv');
+      bankFileError = 'El archivo del extracto bancario debe ser CSV';
+    }
     
     if (!isValidBankFile) {
-      const error = bankType === 'banco_bogota' 
-        ? 'El archivo del extracto bancario debe ser CSV o TXT'
-        : 'El archivo del extracto bancario debe ser CSV';
-      console.error(error);
+      console.error(bankFileError);
       return NextResponse.json(
-        { error },
+        { error: bankFileError },
         { status: 400 }
       );
     }
@@ -51,12 +62,18 @@ export async function POST(request: NextRequest) {
     let erpTransactions;
     
     try {
-      bankTransactions = await parseCSV(csvFile, bankType);
+      // Davivienda usa Excel, los demás usan CSV
+      if (bankType === 'davivienda') {
+        bankTransactions = await parseExcelBank(csvFile, bankType);
+      } else {
+        bankTransactions = await parseCSV(csvFile, bankType);
+      }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Error desconocido al procesar CSV';
-      console.error('Error al parsear CSV:', errorMsg);
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido al procesar archivo del banco';
+      console.error('Error al parsear archivo del banco:', errorMsg);
+      const fileType = bankType === 'davivienda' ? 'Excel' : 'CSV';
       return NextResponse.json(
-        { error: `Error en archivo CSV: ${errorMsg}` },
+        { error: `Error en archivo ${fileType} del banco: ${errorMsg}` },
         { status: 400 }
       );
     }
@@ -73,7 +90,8 @@ export async function POST(request: NextRequest) {
     }
     
     if (bankTransactions.length === 0) {
-      const error = 'No se encontraron transacciones válidas en el archivo CSV';
+      const fileType = bankType === 'davivienda' ? 'Excel' : 'CSV';
+      const error = `No se encontraron transacciones válidas en el archivo ${fileType} del banco`;
       console.error(error);
       return NextResponse.json(
         { error },
@@ -95,7 +113,8 @@ export async function POST(request: NextRequest) {
       bankTransactions,
       erpTransactions,
       useDate,
-      tolerance
+      tolerance,
+      bankType
     );
     
     return NextResponse.json(result);

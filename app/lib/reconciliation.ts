@@ -1,4 +1,4 @@
-import { BankTransaction, ERPTransaction, isBankExpense, BANK_EXPENSE_CONCEPTS } from './fileParser';
+import { BankTransaction, ERPTransaction, isBankExpense, BANK_EXPENSE_CONCEPTS, BankType } from './fileParser';
 
 export interface IndexedTransaction {
   index: string;
@@ -119,23 +119,28 @@ function formatDate(date: Date): string {
  * @param erpTransactions Transacciones del ERP
  * @param useDate Si true, concilia por fecha y valor; si false, solo por valor
  * @param tolerance Tolerancia permitida para diferencias (diferencia absoluta)
+ * @param bankType Tipo de banco para identificar conceptos de gastos bancarios
  */
 export function reconcile(
   bankTransactions: BankTransaction[],
   erpTransactions: ERPTransaction[],
   useDate: boolean,
-  tolerance: number = 0
+  tolerance: number = 0,
+  bankType: BankType = 'bancolombia'
 ): ReconciliationResult {
   // Separar gastos bancarios de las transacciones normales
   const bankExpenses: BankExpense[] = [];
   const regularBankTransactions: BankTransaction[] = [];
   
+  // Obtener los conceptos de gastos bancarios para este banco
+  const expenseConcepts = BANK_EXPENSE_CONCEPTS[bankType] || BANK_EXPENSE_CONCEPTS.bancolombia;
+  
   bankTransactions.forEach(transaction => {
     if (transaction.isBankExpense) {
       // Identificar el concepto del gasto bancario
       const descripcion = transaction.descripcion.toUpperCase().trim();
-      const concepto = BANK_EXPENSE_CONCEPTS.find(concept => 
-        descripcion.includes(concept)
+      const concepto = expenseConcepts.find(concept => 
+        descripcion.includes(concept.toUpperCase())
       ) || 'OTRO GASTO BANCARIO';
       
       bankExpenses.push({

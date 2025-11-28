@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import FileUpload from './components/FileUpload';
 import ConfigPanel from './components/ConfigPanel';
 import StatsPanel from './components/StatsPanel';
@@ -18,6 +18,13 @@ export default function Home() {
   const [result, setResult] = useState<ReconciliationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Limpiar archivo del banco cuando cambia el banco seleccionado
+  useEffect(() => {
+    setCsvFile(null);
+    setResult(null);
+    setError(null);
+  }, [selectedBank]);
 
   const handleReconcile = async () => {
     if (!csvFile || !excelFile) {
@@ -186,8 +193,14 @@ export default function Home() {
             {/* File Upload Section */}
             <div className="grid md:grid-cols-2 gap-6 mb-8">
             <FileUpload
-              label="Extracto Bancario (CSV)"
-              accept=".csv"
+              label={
+                selectedBank === 'davivienda'
+                  ? 'Extracto Bancario (Excel)'
+                  : selectedBank === 'banco_bogota'
+                  ? 'Extracto Bancario (CSV o TXT)'
+                  : 'Extracto Bancario (CSV)'
+              }
+              accept={selectedBank === 'davivienda' ? '.xlsx,.xls' : '.csv'}
               file={csvFile}
               onFileChange={setCsvFile}
               error={error && !csvFile ? error : undefined}
@@ -385,7 +398,7 @@ export default function Home() {
                       Sube los Archivos
                     </h3>
                     <p className="text-sm text-gray-600">
-                      Carga el extracto bancario en formato CSV (o TXT para Banco de Bogotá) y el archivo de movimientos del ERP en formato Excel (.xlsx o .xls).
+                      Carga el extracto bancario en formato CSV (o TXT para Banco de Bogotá, Excel para Davivienda) y el archivo de movimientos del ERP en formato Excel (.xlsx o .xls).
                     </p>
                   </div>
                 </div>

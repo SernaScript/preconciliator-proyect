@@ -22,7 +22,24 @@ export default function FileUpload({ label, accept, file, onFileChange, error, b
   }, [onFileChange]);
 
   // Determinar los tipos de archivo aceptados
-  const getAcceptTypes = () => {
+  const getAcceptTypes = (): Record<string, string[]> => {
+    // Si es Davivienda, siempre aceptar Excel
+    if (bankType === 'davivienda') {
+      return {
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+        'application/vnd.ms-excel': ['.xls']
+      };
+    }
+    
+    // Si el accept incluye Excel
+    if (accept.includes('.xlsx') || accept.includes('.xls')) {
+      return { 
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+        'application/vnd.ms-excel': ['.xls']
+      };
+    }
+    
+    // Si es CSV
     if (accept === '.csv') {
       // Si es Banco de Bogotá, aceptar también .txt
       if (bankType === 'banco_bogota') {
@@ -33,10 +50,9 @@ export default function FileUpload({ label, accept, file, onFileChange, error, b
       }
       return { 'text/csv': ['.csv'] };
     }
-    return { 
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls']
-    };
+    
+    // Por defecto, CSV
+    return { 'text/csv': ['.csv'] };
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -121,7 +137,11 @@ export default function FileUpload({ label, accept, file, onFileChange, error, b
               </p>
               <p className="text-xs text-gray-500">
                 {accept === '.csv' 
-                  ? (bankType === 'banco_bogota' ? 'CSV o TXT' : 'CSV')
+                  ? (bankType === 'davivienda' 
+                      ? 'Excel (.xlsx, .xls)' 
+                      : bankType === 'banco_bogota' 
+                        ? 'CSV o TXT' 
+                        : 'CSV')
                   : 'Excel (.xlsx, .xls)'}
               </p>
             </>

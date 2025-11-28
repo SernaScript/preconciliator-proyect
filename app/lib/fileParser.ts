@@ -14,30 +14,46 @@ export interface BankTransaction {
   isBankExpense?: boolean; // Indica si es un gasto bancario
 }
 
-// Lista de conceptos de gastos bancarios
-export const BANK_EXPENSE_CONCEPTS = [
-  'ABONO INTERESES AHORROS',
-  'COBRO IVA PAGOS AUTOMATICOS',
-  'COMIS TRASLADO EN SUCURSAL',
-  'CUOTA MANEJO CUPO ROTATIVO',
-  'CUOTA PLAN CANAL NEGOCIOS',
-  'CXC IMPTO GOBIERNO 4X1000 MON',
-  'IMPTO GOBIERNO 4X1000',
-  'IVA CUOTA MANEJO CUPO ROTATIVO',
-  'IVA CUOTA PLAN CANAL NEGOCIOS',
-  'PAGO CXC DESDE CTA 39900001230',
-  'SERVICIO PAGO A OTROS BANCOS',
-  'SERVICIO PAGO A PROVEEDORES',
-  'VALOR IVA',
-];
+// Lista de conceptos de gastos bancarios por banco
+export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
+  bancolombia: [
+    'ABONO INTERESES AHORROS',
+    'COBRO IVA PAGOS AUTOMATICOS',
+    'COMIS TRASLADO EN SUCURSAL',
+    'CUOTA MANEJO CUPO ROTATIVO',
+    'CUOTA PLAN CANAL NEGOCIOS',
+    'CXC IMPTO GOBIERNO 4X1000 MON',
+    'IMPTO GOBIERNO 4X1000',
+    'IVA CUOTA MANEJO CUPO ROTATIVO',
+    'IVA CUOTA PLAN CANAL NEGOCIOS',
+    'PAGO CXC DESDE CTA 39900001230',
+    'SERVICIO PAGO A OTROS BANCOS',
+    'SERVICIO PAGO A PROVEEDORES',
+    'VALOR IVA',
+  ],
+  banco_occidente: [
+    // TODO: Agregar conceptos cuando se conozcan
+  ],
+  banco_bogota: [
+    // TODO: Agregar conceptos cuando se conozcan
+  ],
+  davivienda: [
+    'Gmf Gravamen Mvto Financiero - Nota Débito',
+    'Pagos Servicios Corporativos - Nota Débito',
+    'Intereses De Sobregiro - Nota Débito',
+    "Cobro IVA Servicios Financieros - Nota Débito",
+    "Cobro Servicio Manejo Portal - Nota Débito"
+  ],
+};
 
 /**
  * Verifica si una transacción bancaria es un gasto bancario
- * basándose en la descripción
+ * basándose en la descripción y el banco
  */
-export function isBankExpense(transaction: BankTransaction): boolean {
+export function isBankExpense(transaction: BankTransaction, bankType: BankType = 'bancolombia'): boolean {
   const descripcion = transaction.descripcion.toUpperCase().trim();
-  return BANK_EXPENSE_CONCEPTS.some(concept => descripcion.includes(concept));
+  const concepts = BANK_EXPENSE_CONCEPTS[bankType] || BANK_EXPENSE_CONCEPTS.bancolombia;
+  return concepts.some(concept => descripcion.includes(concept.toUpperCase()));
 }
 
 export interface ERPTransaction {
@@ -177,19 +193,20 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
 
 /**
  * Obtiene el parser específico para cada banco
+ * Retorna una función que recibe (row, index, bankType)
  */
 function getBankParser(bankType: BankType) {
   switch (bankType) {
     case 'bancolombia':
-      return parseBancolombiaRow;
+      return (row: any, index: number) => parseBancolombiaRow(row, index, bankType);
     case 'banco_occidente':
-      return parseBancoOccidenteRow;
+      return (row: any, index: number) => parseBancoOccidenteRow(row, index, bankType);
     case 'banco_bogota':
-      return parseBancoBogotaRow;
+      return (row: any, index: number) => parseBancoBogotaRow(row, index, bankType);
     case 'davivienda':
-      return parseDaviviendaRow;
+      return (row: any, index: number) => parseDaviviendaRow(row, index, bankType);
     default:
-      return parseBancolombiaRow;
+      return (row: any, index: number) => parseBancolombiaRow(row, index, bankType);
   }
 }
 
@@ -198,7 +215,7 @@ function getBankParser(bankType: BankType) {
  * Formato: cuenta, iniciales, , fecha(YYYYMMDD), , valor, código, descripción, verificado
  * Posiciones: [0]=cuenta, [1]=iniciales, [3]=fecha, [5]=valor, [6]=código, [7]=descripción
  */
-function parseBancolombiaRow(row: any, index: number): BankTransaction | null {
+function parseBancolombiaRow(row: any, index: number, bankType: BankType = 'bancolombia'): BankTransaction | null {
   if (!Array.isArray(row) || row.length < 8) {
     return null; // Saltar filas inválidas
   }
@@ -247,7 +264,7 @@ function parseBancolombiaRow(row: any, index: number): BankTransaction | null {
   };
   
   // Marcar si es un gasto bancario
-  transaction.isBankExpense = isBankExpense(transaction);
+  transaction.isBankExpense = isBankExpense(transaction, bankType);
   
   return transaction;
 }
@@ -256,10 +273,10 @@ function parseBancolombiaRow(row: any, index: number): BankTransaction | null {
  * Parsea una fila del formato Banco de Occidente
  * TODO: Implementar cuando se conozca el formato específico
  */
-function parseBancoOccidenteRow(row: any, index: number): BankTransaction | null {
+function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'banco_occidente'): BankTransaction | null {
   // Por ahora, usar el mismo formato que Bancolombia
   // TODO: Ajustar según el formato real del Banco de Occidente
-  return parseBancolombiaRow(row, index);
+  return parseBancolombiaRow(row, index, bankType);
 }
 
 /**
@@ -267,7 +284,7 @@ function parseBancoOccidenteRow(row: any, index: number): BankTransaction | null
  * Formato CSV/TXT con encabezados: "Fecha", "Transacción", "Oficina", "Documento", "Débito", "Crédito"
  * Calcula: Valor = Débito - Crédito
  */
-function parseBancoBogotaRow(row: any, index: number): BankTransaction | null {
+function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banco_bogota'): BankTransaction | null {
   // El row es un objeto con las propiedades del encabezado cuando se usa header: true
   if (!row || typeof row !== 'object') {
     if (index < 3) {
@@ -478,8 +495,8 @@ function parseBancoBogotaRow(row: any, index: number): BankTransaction | null {
     originalIndex: index,
   };
   
-  // Marcar si es un gasto bancario (por ahora no, hasta que el usuario proporcione los conceptos)
-  transaction.isBankExpense = isBankExpense(transaction);
+  // Marcar si es un gasto bancario
+  transaction.isBankExpense = isBankExpense(transaction, bankType);
   
   return transaction;
 }
@@ -488,10 +505,328 @@ function parseBancoBogotaRow(row: any, index: number): BankTransaction | null {
  * Parsea una fila del formato Davivienda
  * TODO: Implementar cuando se conozca el formato específico
  */
-function parseDaviviendaRow(row: any, index: number): BankTransaction | null {
+function parseDaviviendaRow(row: any, index: number, bankType: BankType = 'davivienda'): BankTransaction | null {
   // Por ahora, usar el mismo formato que Bancolombia
   // TODO: Ajustar según el formato real de Davivienda
-  return parseBancolombiaRow(row, index);
+  return parseBancolombiaRow(row, index, bankType);
+}
+
+/**
+ * Parsea un archivo Excel del banco (para bancos que usan Excel como Davivienda)
+ */
+export async function parseExcelBank(file: File, bankType: BankType): Promise<BankTransaction[]> {
+  if (bankType === 'davivienda') {
+    return parseExcelDavivienda(file);
+  }
+  throw new Error(`El banco ${bankType} no usa archivos Excel para extractos bancarios`);
+}
+
+/**
+ * Parsea un archivo Excel de Davivienda
+ * Columnas: "Fecha de Sistema", "Documento", "Descripción motivo", "Transacción", "Oficina de Recaudo", 
+ * "ID Origen/Destino", "Valor Cheque", "Valor Total", "Referencia 1", "Referencia 2"
+ * El valor ya está en su naturaleza (positivo/negativo) en "Valor Total"
+ * Las fechas ya vienen formateadas en el Excel
+ */
+async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
+  const errors: string[] = [];
+  
+  try {
+    // Convertir File a ArrayBuffer
+    let arrayBuffer: ArrayBuffer;
+    try {
+      arrayBuffer = await file.arrayBuffer();
+    } catch (error) {
+      const errorMsg = 'No se pudo leer el archivo Excel. Verifica que el archivo no esté corrupto.';
+      console.error(errorMsg, error);
+      throw new Error(errorMsg);
+    }
+    
+    const data = new Uint8Array(arrayBuffer);
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(data, { type: 'array' });
+    } catch (error) {
+      const errorMsg = 'El archivo Excel no es válido o está corrupto. Verifica que sea un archivo .xlsx o .xls válido.';
+      console.error(errorMsg, error);
+      throw new Error(errorMsg);
+    }
+    
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      const errorMsg = 'El archivo Excel no contiene hojas. Verifica que el archivo tenga al menos una hoja con datos.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Obtener la primera hoja
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    if (!worksheet) {
+      const errorMsg = `No se pudo leer la hoja "${firstSheetName}". Verifica que la hoja contenga datos.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Convertir a JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    
+    if (!jsonData || jsonData.length === 0) {
+      const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    console.log('=== PARSE EXCEL DAVIVIENDA ===');
+    console.log('Total de filas:', jsonData.length);
+    
+    const transactions: BankTransaction[] = [];
+    
+    // Buscar la fila de encabezados (buscar "Fecha de Sistema" u otros nombres de columnas)
+    let headerRowIndex = -1;
+    for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+      const row = jsonData[i] as any[];
+      if (Array.isArray(row) && row.length > 0) {
+        // Buscar en todas las celdas de la fila
+        for (let j = 0; j < row.length; j++) {
+          const cell = String(row[j] || '').trim();
+          if (cell.includes('Fecha de Sistema') || cell.includes('Valor Total') || cell.includes('Documento')) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+        if (headerRowIndex !== -1) break;
+      }
+    }
+    
+    if (headerRowIndex === -1) {
+      const errorMsg = `No se encontró la fila de encabezados en el archivo Excel de Davivienda. Se esperaba encontrar una fila que contenga "Fecha de Sistema" o "Valor Total" en las primeras 10 filas.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Obtener los encabezados (cada celda es una columna)
+    const headerRow = jsonData[headerRowIndex] as any[];
+    const headerColumns: string[] = headerRow.map(cell => String(cell || '').trim());
+    
+    console.log('Encabezados encontrados:', headerColumns);
+    console.log('Número de columnas:', headerColumns.length);
+    
+    // Mapear nombres de columnas a índices (búsqueda flexible)
+    const getColumnIndex = (searchTerms: string[]): number => {
+      for (const term of searchTerms) {
+        const lowerTerm = term.toLowerCase();
+        const index = headerColumns.findIndex(col => {
+          const lowerCol = col.toLowerCase();
+          return lowerCol.includes(lowerTerm) || lowerTerm.includes(lowerCol);
+        });
+        if (index !== -1) return index;
+      }
+      return -1;
+    };
+    
+    const fechaIndex = getColumnIndex(['Fecha de Sistema', 'Fecha', 'fecha']);
+    const documentoIndex = getColumnIndex(['Documento', 'documento']);
+    const descripcionIndex = getColumnIndex(['Descripción motivo', 'Descripción', 'descripcion motivo', 'descripcion']);
+    const transaccionIndex = getColumnIndex(['Transacción', 'Transaccion', 'transacción', 'transaccion']);
+    const oficinaIndex = getColumnIndex(['Oficina de Recaudo', 'Oficina', 'oficina de recaudo', 'oficina']);
+    const valorTotalIndex = getColumnIndex(['Valor Total', 'valor total', 'Valor', 'valor']);
+    
+    console.log('Índices de columnas:', {
+      fecha: fechaIndex,
+      documento: documentoIndex,
+      descripcion: descripcionIndex,
+      transaccion: transaccionIndex,
+      oficina: oficinaIndex,
+      valorTotal: valorTotalIndex
+    });
+    
+    if (fechaIndex === -1 || valorTotalIndex === -1) {
+      const errorMsg = `No se encontraron las columnas requeridas. Se esperaba "Fecha de Sistema" y "Valor Total".`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Procesar filas de datos
+    let rowsProcessed = 0;
+    let rowsRejected = 0;
+    
+    // Variable para logging (índice relativo a filas de datos)
+    let dataRowIndex = 0;
+    
+    for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+      const row = jsonData[i] as any[];
+      if (!Array.isArray(row) || row.length === 0) {
+        continue;
+      }
+      
+      rowsProcessed++;
+      dataRowIndex++;
+      
+      // Extraer valores
+      const fechaValue = row[fechaIndex];
+      const documento = String(row[documentoIndex] || '').trim();
+      const descripcion = String(row[descripcionIndex] || '').trim();
+      const transaccion = String(row[transaccionIndex] || '').trim();
+      const oficina = String(row[oficinaIndex] || '').trim();
+      const valorTotalValue = row[valorTotalIndex];
+      
+      // Validar fecha
+      if (!fechaValue) {
+        rowsRejected++;
+        if (rowsRejected <= 3) {
+          errors.push(`Fila ${i + 1}: Falta la fecha.`);
+        }
+        continue;
+      }
+      
+      // Parsear fecha (formato dd/mm/yyyy en Davivienda)
+      let fecha: Date;
+      try {
+        if (fechaValue instanceof Date) {
+          fecha = fechaValue;
+        } else if (typeof fechaValue === 'number') {
+          // Si es un número serial de Excel
+          const excelEpoch = new Date(1899, 11, 30);
+          fecha = new Date(excelEpoch.getTime() + fechaValue * 86400000);
+        } else {
+          // Intentar parsear como string en formato dd/mm/yyyy
+          const fechaStr = String(fechaValue).trim();
+          
+          // Formato dd/mm/yyyy
+          const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+          const match = fechaStr.match(datePattern);
+          
+          if (match) {
+            const day = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
+            const year = parseInt(match[3], 10);
+            fecha = new Date(year, month, day);
+            
+            // Validar que la fecha sea válida
+            if (isNaN(fecha.getTime()) || 
+                fecha.getDate() !== day || 
+                fecha.getMonth() !== month || 
+                fecha.getFullYear() !== year) {
+              throw new Error('Fecha inválida');
+            }
+          } else {
+            // Si no coincide con dd/mm/yyyy, intentar parsear como fecha estándar
+            fecha = new Date(fechaStr);
+            if (isNaN(fecha.getTime())) {
+              throw new Error('Fecha inválida');
+            }
+          }
+        }
+        
+        if (isNaN(fecha.getTime())) {
+          throw new Error('Fecha inválida');
+        }
+      } catch (error) {
+        rowsRejected++;
+        if (rowsRejected <= 3) {
+          errors.push(`Fila ${i + 1}: Fecha inválida "${fechaValue}". Se espera formato dd/mm/yyyy.`);
+        }
+        continue;
+      }
+      
+      // Parsear valor total (ya viene con su naturaleza)
+      // Formato: "$ 111.827,59" donde punto es miles y coma es decimal
+      // Limpiar: eliminar espacios, signos de peso ($), puntos (miles) y convertir coma (decimal) a punto
+      let valor = 0;
+      try {
+        if (typeof valorTotalValue === 'number') {
+          valor = valorTotalValue;
+        } else {
+          // Limpiar el valor: formato "$ 111.827,59"
+          let valorStr = String(valorTotalValue || '0').trim();
+          
+          if (dataRowIndex < 3) {
+            console.log(`[Davivienda] Fila ${i + 1} - Valor original: "${valorTotalValue}"`);
+          }
+          
+          // Eliminar espacios
+          valorStr = valorStr.replace(/\s+/g, '');
+          
+          // Eliminar signos de peso ($)
+          valorStr = valorStr.replace(/\$/g, '');
+          
+          // Eliminar puntos (separadores de miles)
+          valorStr = valorStr.replace(/\./g, '');
+          
+          // Reemplazar coma (separador decimal) por punto para parseFloat
+          valorStr = valorStr.replace(/,/g, '.');
+          
+          // Parsear el valor
+          valor = parseFloat(valorStr) || 0;
+          
+          if (dataRowIndex < 3) {
+            console.log(`[Davivienda] Fila ${i + 1} - Limpiado: "${valorStr}", Parseado: ${valor}`);
+          }
+        }
+      } catch (error) {
+        rowsRejected++;
+        if (rowsRejected <= 3) {
+          errors.push(`Fila ${i + 1}: Valor Total inválido "${valorTotalValue}".`);
+        }
+        continue;
+      }
+      
+      // Validar que tenga valor
+      if (valor === 0) {
+        rowsRejected++;
+        if (rowsRejected <= 3) {
+          errors.push(`Fila ${i + 1}: Valor Total es cero.`);
+        }
+        continue;
+      }
+      
+      // Combinar descripción y transacción
+      const descripcionCompleta = [descripcion, transaccion].filter(s => s).join(' - ') || '';
+      
+      const transaction: BankTransaction = {
+        cuenta: oficina || '',
+        iniciales: '',
+        fecha,
+        valor,
+        codigo: documento || '',
+        descripcion: descripcionCompleta || 'Sin descripción',
+        originalIndex: i - headerRowIndex - 1, // Índice relativo a las filas de datos
+      };
+      
+      // Marcar si es un gasto bancario
+      transaction.isBankExpense = isBankExpense(transaction, 'davivienda');
+      
+      transactions.push(transaction);
+    }
+    
+    console.log('=== RESUMEN DAVIVIENDA ===');
+    console.log('Filas procesadas:', rowsProcessed);
+    console.log('Filas rechazadas:', rowsRejected);
+    console.log('Transacciones válidas:', transactions.length);
+    
+    if (transactions.length === 0) {
+      let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel de Davivienda.';
+      if (errors.length > 0) {
+        errorMsg += '\n\nErrores encontrados:\n' + errors.slice(0, 5).join('\n');
+        if (errors.length > 5) {
+          errorMsg += `\n... y ${errors.length - 5} errores más.`;
+        }
+      }
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    if (errors.length > 0) {
+      console.warn('Advertencias al procesar Davivienda:', errors);
+    }
+    
+    return transactions;
+  } catch (error) {
+    const errorMessage = `Error al parsear Excel de Davivienda: ${error instanceof Error ? error.message : 'Error desconocido'}`;
+    console.error(errorMessage, error);
+    throw new Error(errorMessage);
+  }
 }
 
 /**
