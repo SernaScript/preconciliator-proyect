@@ -9,9 +9,10 @@ interface FileUploadProps {
   file: File | null;
   onFileChange: (file: File | null) => void;
   error?: string;
+  bankType?: string; // Para determinar si acepta .txt
 }
 
-export default function FileUpload({ label, accept, file, onFileChange, error }: FileUploadProps) {
+export default function FileUpload({ label, accept, file, onFileChange, error, bankType }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -20,12 +21,27 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
     }
   }, [onFileChange]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: accept === '.csv' ? { 'text/csv': ['.csv'] } : { 
+  // Determinar los tipos de archivo aceptados
+  const getAcceptTypes = () => {
+    if (accept === '.csv') {
+      // Si es Banco de Bogotá, aceptar también .txt
+      if (bankType === 'banco_bogota') {
+        return {
+          'text/csv': ['.csv'],
+          'text/plain': ['.txt']
+        };
+      }
+      return { 'text/csv': ['.csv'] };
+    }
+    return { 
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'application/vnd.ms-excel': ['.xls']
-    },
+    };
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: getAcceptTypes(),
     multiple: false,
     onDragEnter: () => setIsDragging(true),
     onDragLeave: () => setIsDragging(false),
@@ -104,7 +120,9 @@ export default function FileUpload({ label, accept, file, onFileChange, error }:
                   : 'Arrastra y suelta el archivo aquí, o haz clic para seleccionar'}
               </p>
               <p className="text-xs text-gray-500">
-                {accept === '.csv' ? 'CSV' : 'Excel (.xlsx, .xls)'}
+                {accept === '.csv' 
+                  ? (bankType === 'banco_bogota' ? 'CSV o TXT' : 'CSV')
+                  : 'Excel (.xlsx, .xls)'}
               </p>
             </>
           )}

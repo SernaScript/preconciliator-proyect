@@ -191,6 +191,7 @@ export default function Home() {
               file={csvFile}
               onFileChange={setCsvFile}
               error={error && !csvFile ? error : undefined}
+              bankType={selectedBank}
             />
             <FileUpload
               label="Movimientos ERP (Excel)"
@@ -384,7 +385,7 @@ export default function Home() {
                       Sube los Archivos
                     </h3>
                     <p className="text-sm text-gray-600">
-                      Carga el extracto bancario en formato CSV y el archivo de movimientos del ERP en formato Excel (.xlsx o .xls).
+                      Carga el extracto bancario en formato CSV (o TXT para Banco de Bogotá) y el archivo de movimientos del ERP en formato Excel (.xlsx o .xls).
                     </p>
                   </div>
                 </div>

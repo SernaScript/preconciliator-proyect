@@ -22,8 +22,14 @@ export async function POST(request: NextRequest) {
     }
     
     // Validar tipos de archivo
-    if (!csvFile.name.endsWith('.csv')) {
-      const error = 'El archivo del extracto bancario debe ser CSV';
+    const csvFileName = csvFile.name.toLowerCase();
+    const isValidBankFile = csvFileName.endsWith('.csv') || 
+                           (bankType === 'banco_bogota' && csvFileName.endsWith('.txt'));
+    
+    if (!isValidBankFile) {
+      const error = bankType === 'banco_bogota' 
+        ? 'El archivo del extracto bancario debe ser CSV o TXT'
+        : 'El archivo del extracto bancario debe ser CSV';
       console.error(error);
       return NextResponse.json(
         { error },

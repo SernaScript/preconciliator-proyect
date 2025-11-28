@@ -60,23 +60,99 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
     // Convertir File a texto para usar en Node.js
     const text = await file.text();
     
+    // Banco de Bogotá usa encabezados, los demás no
+    const hasHeaders = bankType === 'banco_bogota';
+    
+    console.log('=== INICIO PARSE CSV ===');
+    console.log('Banco seleccionado:', bankType);
+    console.log('Usa encabezados:', hasHeaders);
+    console.log('Tamaño del archivo:', text.length, 'caracteres');
+    console.log('Primeras 500 caracteres del archivo:', text.substring(0, 500));
+    
     return new Promise((resolve, reject) => {
       Papa.parse(text, {
-        header: false,
+        header: hasHeaders,
         skipEmptyLines: true,
+        delimiter: ',', // Forzar delimitador de coma
+        quoteChar: '"', // Caracter de comillas
+        escapeChar: '"', // Caracter de escape
+        transformHeader: hasHeaders ? (header: string) => {
+          // Normalizar nombres de encabezados: eliminar espacios y normalizar
+          return header.trim().replace(/\s+/g, ' ');
+        } : undefined,
         complete: (results) => {
           try {
+            console.log('=== RESULTADOS DEL PARSING ===');
+            console.log('Total de filas parseadas:', results.data.length);
+            console.log('Errores de parsing:', results.errors);
+            
+            if (hasHeaders && results.data.length > 0) {
+              console.log('Primera fila (con encabezados):', results.data[0]);
+              console.log('Claves de la primera fila:', Object.keys(results.data[0] || {}));
+              console.log('Meta información (encabezados detectados):', results.meta);
+              if (results.meta && results.meta.fields) {
+                console.log('Nombres de columnas detectados por Papa.parse:', results.meta.fields);
+              }
+              // Mostrar todos los valores de la primera fila
+              const firstRow = results.data[0] as any;
+              if (firstRow) {
+                console.log('Valores de la primera fila:');
+                Object.keys(firstRow).forEach(key => {
+                  console.log(`  "${key}": "${firstRow[key]}"`);
+                });
+              }
+            } else if (!hasHeaders && results.data.length > 0) {
+              console.log('Primera fila (sin encabezados):', results.data[0]);
+            }
+            
             const transactions: BankTransaction[] = [];
+            let rowsProcessed = 0;
+            let rowsRejected = 0;
             
             // Seleccionar el parser según el banco
             const parseRow = getBankParser(bankType);
             
-            results.data.forEach((row: any, index: number) => {
-              const transaction = parseRow(row, index);
-              if (transaction) {
-                transactions.push(transaction);
+            if (hasHeaders) {
+              // Para formato con encabezados (Banco de Bogotá)
+              results.data.forEach((row: any, index: number) => {
+                rowsProcessed++;
+                if (index < 3) {
+                  console.log(`Fila ${index + 1}:`, row);
+                }
+                const transaction = parseRow(row, index);
+                if (transaction) {
+                  transactions.push(transaction);
+                } else {
+                  rowsRejected++;
+                  if (rowsRejected <= 5) {
+                    console.log(`Fila ${index + 1} rechazada:`, row);
+                  }
+                }
+              });
+            } else {
+              // Para formato sin encabezados (Bancolombia, etc.)
+              results.data.forEach((row: any, index: number) => {
+                rowsProcessed++;
+                const transaction = parseRow(row, index);
+                if (transaction) {
+                  transactions.push(transaction);
+                } else {
+                  rowsRejected++;
+                }
+              });
+            }
+
+            console.log('=== RESUMEN ===');
+            console.log('Filas procesadas:', rowsProcessed);
+            console.log('Filas rechazadas:', rowsRejected);
+            console.log('Transacciones válidas:', transactions.length);
+            
+            if (transactions.length === 0) {
+              console.error('⚠️ No se encontraron transacciones válidas');
+              if (hasHeaders && results.data.length > 0) {
+                console.error('Ejemplo de fila rechazada:', results.data[0]);
               }
-            });
+            }
 
             resolve(transactions);
           } catch (error) {
@@ -188,12 +264,224 @@ function parseBancoOccidenteRow(row: any, index: number): BankTransaction | null
 
 /**
  * Parsea una fila del formato Banco de Bogotá
- * TODO: Implementar cuando se conozca el formato específico
+ * Formato CSV/TXT con encabezados: "Fecha", "Transacción", "Oficina", "Documento", "Débito", "Crédito"
+ * Calcula: Valor = Débito - Crédito
  */
 function parseBancoBogotaRow(row: any, index: number): BankTransaction | null {
-  // Por ahora, usar el mismo formato que Bancolombia
-  // TODO: Ajustar según el formato real del Banco de Bogotá
-  return parseBancolombiaRow(row, index);
+  // El row es un objeto con las propiedades del encabezado cuando se usa header: true
+  if (!row || typeof row !== 'object') {
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1}: Row inválido o no es objeto:`, row);
+    }
+    return null; // Saltar filas inválidas
+  }
+
+  if (index < 3) {
+    console.log(`[Banco Bogotá] Fila ${index + 1} - Claves disponibles:`, Object.keys(row));
+    console.log(`[Banco Bogotá] Fila ${index + 1} - Datos completos:`, row);
+    // Mostrar cada clave con su valor exacto
+    Object.keys(row).forEach(key => {
+      console.log(`  Clave: "${key}" (tipo: ${typeof key}), Valor: "${row[key]}" (tipo: ${typeof row[key]})`);
+    });
+  }
+
+  // Extraer valores del objeto - buscar todas las variaciones posibles de nombres de columnas
+  // Papa.parse puede normalizar los nombres, así que buscamos con y sin espacios, con y sin acentos
+  const getValue = (variations: string[]): string => {
+    const rowAny = row as any; // Type assertion para permitir indexación dinámica
+    for (const variation of variations) {
+      // Buscar exacto
+      if (rowAny[variation] !== undefined && rowAny[variation] !== null && rowAny[variation] !== '') {
+        const value = String(rowAny[variation]).trim();
+        if (index < 3 && value) {
+          console.log(`  ✓ Encontrado "${variation}": "${value}"`);
+        }
+        return value;
+      }
+      // Buscar case-insensitive
+      const lowerVariation = variation.toLowerCase();
+      for (const key of Object.keys(row)) {
+        if (key.toLowerCase() === lowerVariation) {
+          const value = String(rowAny[key]).trim();
+          if (index < 3 && value) {
+            console.log(`  ✓ Encontrado (case-insensitive) "${key}" (buscaba "${variation}"): "${value}"`);
+          }
+          return value;
+        }
+      }
+    }
+    if (index < 3) {
+      console.log(`  ✗ No encontrado en variaciones:`, variations);
+    }
+    return '';
+  };
+
+  const fechaStr = getValue([
+    'Fecha', 'fecha', 'FECHA',
+    ' Fecha', ' Fecha ', 'Fecha ',
+    'Fecha', 'fecha'
+  ]);
+  
+  const transaccion = getValue([
+    'Transacción', 'Transaccion', 'transacción', 'transaccion', 'TRANSACCIÓN', 'TRANSACCION',
+    ' Transacción', ' Transaccion', 'Transacción ', 'Transaccion ',
+    'Transacción', 'Transaccion'
+  ]);
+  
+  const oficina = getValue([
+    'Oficina', 'oficina', 'OFICINA',
+    ' Oficina', ' Oficina ', 'Oficina '
+  ]);
+  
+  const documento = getValue([
+    'Documento', 'documento', 'DOCUMENTO',
+    ' Documento', ' Documento ', 'Documento '
+  ]);
+  
+  const debitoStr = getValue([
+    'Débito', 'Debito', 'débito', 'debito', 'DÉBITO', 'DEBITO',
+    ' Débito', ' Debito', 'Débito ', 'Debito ',
+    'Débito', 'Debito'
+  ]) || '0';
+  
+  const creditoStr = getValue([
+    'Crédito', 'Credito', 'crédito', 'credito', 'CRÉDITO', 'CREDITO',
+    ' Crédito', ' Credito', 'Crédito ', 'Credito ',
+    'Crédito', 'Credito'
+  ]) || '0';
+
+  if (index < 3) {
+    console.log(`[Banco Bogotá] Fila ${index + 1} - Valores extraídos:`, {
+      fechaStr,
+      transaccion,
+      oficina,
+      documento,
+      debitoStr,
+      creditoStr
+    });
+  }
+
+  // Validar que tengamos los campos esenciales
+  if (!fechaStr) {
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Fecha vacía`);
+    }
+    return null;
+  }
+
+  // Parsear fecha (puede venir en diferentes formatos: MM/YY, dd/mm/yyyy, yyyy-mm-dd, etc.)
+  let fecha: Date;
+  try {
+    // Intentar diferentes formatos de fecha
+    const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
+    
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1} - Parseando fecha: "${fechaStrClean}"`);
+    }
+    
+    // Formato MM/DD (mes/día) - Banco de Bogotá usa este formato, año es 2025
+    const datePatternMMDD = /^(\d{1,2})\/(\d{1,2})$/;
+    const matchMMDD = fechaStrClean.match(datePatternMMDD);
+    
+    if (matchMMDD) {
+      const month = parseInt(matchMMDD[1], 10) - 1; // Mes es 0-indexed
+      const day = parseInt(matchMMDD[2], 10);
+      const year = 2025; // Año actual
+      fecha = new Date(year, month, day);
+      if (index < 3) {
+        console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (MM/DD, año 2025):`, fecha);
+      }
+    } else {
+      // Formato dd/mm/yyyy
+      const datePattern1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const match1 = fechaStrClean.match(datePattern1);
+      
+      if (match1) {
+        const day = parseInt(match1[1], 10);
+        const month = parseInt(match1[2], 10) - 1; // Mes es 0-indexed
+        const year = parseInt(match1[3], 10);
+        fecha = new Date(year, month, day);
+        if (index < 3) {
+          console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (dd/mm/yyyy):`, fecha);
+        }
+      } else {
+        // Formato yyyy-mm-dd
+        const datePattern2 = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+        const match2 = fechaStrClean.match(datePattern2);
+        
+        if (match2) {
+          const year = parseInt(match2[1], 10);
+          const month = parseInt(match2[2], 10) - 1;
+          const day = parseInt(match2[3], 10);
+          fecha = new Date(year, month, day);
+          if (index < 3) {
+            console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (yyyy-mm-dd):`, fecha);
+          }
+        } else {
+          // Intentar parsear como fecha estándar
+          fecha = new Date(fechaStrClean);
+          if (index < 3) {
+            console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (estándar):`, fecha);
+          }
+        }
+      }
+    }
+    
+    if (isNaN(fecha.getTime())) {
+      if (index < 3) {
+        console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Fecha inválida "${fechaStrClean}"`);
+      }
+      return null; // Fecha inválida
+    }
+  } catch (error) {
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Error al parsear fecha:`, error);
+    }
+    return null; // Error al parsear fecha
+  }
+
+  // Parsear Débito y Crédito
+  // Manejar strings vacíos y valores con comillas y puntos como separadores de miles
+  const debitoClean = debitoStr.replace(/['"]/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
+  const creditoClean = creditoStr.replace(/['"]/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
+  
+  // Si está vacío, usar 0
+  const debito = debitoClean === '' ? 0 : parseFloat(debitoClean) || 0;
+  const credito = creditoClean === '' ? 0 : parseFloat(creditoClean) || 0;
+
+  if (index < 3) {
+    console.log(`[Banco Bogotá] Fila ${index + 1} - Débito: ${debito}, Crédito: ${credito}`);
+  }
+
+  // Calcular Valor = Débito - Crédito
+  const valor = debito - credito;
+
+  // Validar que al menos uno de los valores (débito o crédito) sea diferente de cero
+  if (debito === 0 && credito === 0) {
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Transacción sin valor (débito y crédito en 0)`);
+    }
+    return null; // Transacción sin valor
+  }
+
+  if (index < 3) {
+    console.log(`[Banco Bogotá] Fila ${index + 1} - Valor calculado: ${valor}`);
+  }
+
+  const transaction: BankTransaction = {
+    cuenta: oficina || '', // Usar oficina como cuenta
+    iniciales: '', // No disponible en este formato
+    fecha,
+    valor,
+    codigo: documento || '', // Usar documento como código
+    descripcion: transaccion || '', // Usar transacción como descripción
+    originalIndex: index,
+  };
+  
+  // Marcar si es un gasto bancario (por ahora no, hasta que el usuario proporcione los conceptos)
+  transaction.isBankExpense = isBankExpense(transaction);
+  
+  return transaction;
 }
 
 /**
@@ -370,7 +658,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       if (!fechaElaboracionValue) {
         rowsWithErrors++;
         if (rowsWithErrors <= 3) {
-          errors.push(`Fila ${i + 1}: Falta la fecha de elaboración (columna 5).`);
+          errors.push(`Fila ${i + 1}: Falta la Fecha elaboración (columna 5).`);
         }
         continue;
       }
@@ -458,7 +746,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       errors.push(`... y ${rowsWithInvalidDate - 3} filas más con fechas inválidas.`);
     }
     if (rowsWithErrors > 3) {
-      errors.push(`... y ${rowsWithErrors - 3} filas más sin fecha de elaboración.`);
+      errors.push(`... y ${rowsWithErrors - 3} filas más sin Fecha elaboración.`);
     }
     
     // Si no se encontraron transacciones válidas, lanzar error con detalles
