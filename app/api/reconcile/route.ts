@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
     let isValidBankFile = false;
     let bankFileError = '';
     
-    if (bankType === 'davivienda') {
-      // Davivienda usa Excel
+    if (bankType === 'davivienda' || bankType === 'banco_occidente') {
+      // Davivienda y Banco de Occidente usan Excel
       isValidBankFile = bankFileName.endsWith('.xlsx') || bankFileName.endsWith('.xls');
-      bankFileError = 'El archivo del extracto bancario de Davivienda debe ser Excel (.xlsx o .xls)';
+      bankFileError = `El archivo del extracto bancario de ${bankType === 'davivienda' ? 'Davivienda' : 'Banco de Occidente'} debe ser Excel (.xlsx o .xls)`;
     } else if (bankType === 'banco_bogota') {
       // Banco de Bogotá usa CSV o TXT
       isValidBankFile = bankFileName.endsWith('.csv') || bankFileName.endsWith('.txt');
@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
     let erpTransactions;
     
     try {
-      // Davivienda usa Excel, los demás usan CSV
-      if (bankType === 'davivienda') {
+      // Davivienda y Banco de Occidente usan Excel, los demás usan CSV
+      if (bankType === 'davivienda' || bankType === 'banco_occidente') {
         bankTransactions = await parseExcelBank(csvFile, bankType);
       } else {
         bankTransactions = await parseCSV(csvFile, bankType);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Error desconocido al procesar archivo del banco';
       console.error('Error al parsear archivo del banco:', errorMsg);
-      const fileType = bankType === 'davivienda' ? 'Excel' : 'CSV';
+      const fileType = (bankType === 'davivienda' || bankType === 'banco_occidente') ? 'Excel' : 'CSV';
       return NextResponse.json(
         { error: `Error en archivo ${fileType} del banco: ${errorMsg}` },
         { status: 400 }
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
     
     if (bankTransactions.length === 0) {
-      const fileType = bankType === 'davivienda' ? 'Excel' : 'CSV';
+      const fileType = (bankType === 'davivienda' || bankType === 'banco_occidente') ? 'Excel' : 'CSV';
       const error = `No se encontraron transacciones válidas en el archivo ${fileType} del banco`;
       console.error(error);
       return NextResponse.json(

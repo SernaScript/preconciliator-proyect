@@ -23,8 +23,8 @@ export default function FileUpload({ label, accept, file, onFileChange, error, b
 
   // Determinar los tipos de archivo aceptados
   const getAcceptTypes = (): Record<string, string[]> => {
-    // Si es Davivienda, siempre aceptar Excel
-    if (bankType === 'davivienda') {
+    // Si es Davivienda o Banco de Occidente, siempre aceptar Excel
+    if (bankType === 'davivienda' || bankType === 'banco_occidente') {
       return {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
         'application/vnd.ms-excel': ['.xls']
@@ -137,7 +137,7 @@ export default function FileUpload({ label, accept, file, onFileChange, error, b
               </p>
               <p className="text-xs text-gray-500">
                 {accept === '.csv' 
-                  ? (bankType === 'davivienda' 
+                  ? (bankType === 'davivienda' || bankType === 'banco_occidente'
                       ? 'Excel (.xlsx, .xls)' 
                       : bankType === 'banco_bogota' 
                         ? 'CSV o TXT' 

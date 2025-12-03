@@ -32,7 +32,9 @@ export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
     'VALOR IVA',
   ],
   banco_occidente: [
-    // TODO: Agregar conceptos cuando se conozcan
+    'IVA COBRADO',
+    'GMF',
+    'COMISION', // Cualquier descripción que incluya la palabra "COMISION"
   ],
   banco_bogota: [
     // TODO: Agregar conceptos cuando se conozcan
@@ -53,6 +55,14 @@ export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
 export function isBankExpense(transaction: BankTransaction, bankType: BankType = 'bancolombia'): boolean {
   const descripcion = transaction.descripcion.toUpperCase().trim();
   const concepts = BANK_EXPENSE_CONCEPTS[bankType] || BANK_EXPENSE_CONCEPTS.bancolombia;
+  
+  // Para Banco de Occidente, también verificar si contiene "COMISION"
+  if (bankType === 'banco_occidente') {
+    if (descripcion.includes('COMISION')) {
+      return true;
+    }
+  }
+  
   return concepts.some(concept => descripcion.includes(concept.toUpperCase()));
 }
 
@@ -78,10 +88,13 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
     
     // Banco de Bogotá usa encabezados, los demás no
     const hasHeaders = bankType === 'banco_bogota';
+    // Banco de Occidente comienza en la fila 7 (índice 6)
+    const startRow = bankType === 'banco_occidente' ? 6 : 0;
     
     console.log('=== INICIO PARSE CSV ===');
     console.log('Banco seleccionado:', bankType);
     console.log('Usa encabezados:', hasHeaders);
+    console.log('Fila de inicio:', startRow === 0 ? 'Desde el inicio' : `Fila ${startRow + 1}`);
     console.log('Tamaño del archivo:', text.length, 'caracteres');
     console.log('Primeras 500 caracteres del archivo:', text.substring(0, 500));
     
@@ -146,14 +159,24 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
                 }
               });
             } else {
-              // Para formato sin encabezados (Bancolombia, etc.)
+              // Para formato sin encabezados (Bancolombia, Banco de Occidente, etc.)
               results.data.forEach((row: any, index: number) => {
+                // Para Banco de Occidente, saltar las primeras 6 filas (índices 0-5)
+                if (bankType === 'banco_occidente' && index < startRow) {
+                  return; // Saltar esta fila
+                }
+                
                 rowsProcessed++;
-                const transaction = parseRow(row, index);
+                // Ajustar el índice para Banco de Occidente (restar las filas saltadas)
+                const adjustedIndex = bankType === 'banco_occidente' ? index - startRow : index;
+                const transaction = parseRow(row, adjustedIndex);
                 if (transaction) {
                   transactions.push(transaction);
                 } else {
                   rowsRejected++;
+                  if (rowsRejected <= 5 && bankType === 'banco_occidente') {
+                    console.log(`Fila ${index + 1} (ajustada: ${adjustedIndex + 1}) rechazada:`, row);
+                  }
                 }
               });
             }
@@ -271,12 +294,165 @@ function parseBancolombiaRow(row: any, index: number, bankType: BankType = 'banc
 
 /**
  * Parsea una fila del formato Banco de Occidente
- * TODO: Implementar cuando se conozca el formato específico
+ * Formato: Los datos comienzan en la fila 7 (índice 6)
+ * Columnas por posición (11 columnas totales):
+ * - Columna 1 (índice 0): Fecha en formato yyyy/mm/dd
+ * - Columna 3 (índice 2): Nombre de transacción
+ * - Columna 4 (índice 3): Número de documento
+ * - Columna 5 (índice 4): Débito (string con formato "$ 111.827,59")
+ * - Columna 6 (índice 5): Crédito (string con formato "$ 111.827,59")
+ * Calcula: Valor = Débito - Crédito
  */
 function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'banco_occidente'): BankTransaction | null {
-  // Por ahora, usar el mismo formato que Bancolombia
-  // TODO: Ajustar según el formato real del Banco de Occidente
-  return parseBancolombiaRow(row, index, bankType);
+  // Validar que row sea un array con al menos 6 columnas
+  if (!Array.isArray(row) || row.length < 6) {
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1}: Row inválido o insuficientes columnas (${row.length} encontradas, se esperaban al menos 6)`);
+    }
+    return null; // Saltar filas inválidas
+  }
+
+  // Extraer valores por posición (índices)
+  const fechaStr = String(row[0] || '').trim(); // Columna 1 (índice 0): Fecha
+  const nombreTransaccion = String(row[2] || '').trim(); // Columna 3 (índice 2): Nombre de transacción
+  const numeroDocumento = String(row[3] || '').trim(); // Columna 4 (índice 3): Número de documento
+  const debitoStr = String(row[4] || '').trim(); // Columna 5 (índice 4): Débito
+  const creditoStr = String(row[5] || '').trim(); // Columna 6 (índice 5): Crédito
+
+  if (index < 3) {
+    console.log(`[Banco Occidente] Fila ${index + 1} - Valores extraídos:`, {
+      fechaStr,
+      nombreTransaccion,
+      numeroDocumento,
+      debitoStr,
+      creditoStr
+    });
+  }
+
+  // Validar que tengamos los campos esenciales
+  if (!fechaStr) {
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Fecha vacía`);
+    }
+    return null;
+  }
+
+  // Parsear fecha (formato yyyy/mm/dd)
+  let fecha: Date;
+  try {
+    const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
+    
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1} - Parseando fecha: "${fechaStrClean}"`);
+    }
+    
+    // Formato yyyy/mm/dd
+    const datePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/;
+    const match = fechaStrClean.match(datePattern);
+    
+    if (match) {
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
+      const day = parseInt(match[3], 10);
+      fecha = new Date(year, month, day);
+      
+      // Validar que la fecha sea válida
+      if (isNaN(fecha.getTime()) || 
+          fecha.getDate() !== day || 
+          fecha.getMonth() !== month || 
+          fecha.getFullYear() !== year) {
+        throw new Error('Fecha inválida');
+      }
+      
+      if (index < 3) {
+        console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (yyyy/mm/dd):`, fecha);
+      }
+    } else {
+      // Intentar parsear como fecha estándar
+      fecha = new Date(fechaStrClean);
+      if (isNaN(fecha.getTime())) {
+        throw new Error('Formato de fecha no reconocido');
+      }
+      if (index < 3) {
+        console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (estándar):`, fecha);
+      }
+    }
+  } catch (error) {
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Error al parsear fecha "${fechaStr}":`, error);
+    }
+    return null; // Error al parsear fecha
+  }
+
+  // Función auxiliar para limpiar y parsear valores monetarios
+  // Formato: "$ 111.827,59" donde punto es miles y coma es decimal
+  const parseMonetaryValue = (valueStr: string): number => {
+    if (!valueStr || valueStr.trim() === '') {
+      return 0;
+    }
+    
+    // Limpiar el valor: eliminar espacios, signos de peso ($), puntos (miles) y convertir coma (decimal) a punto
+    let cleaned = valueStr.trim();
+    
+    // Eliminar espacios
+    cleaned = cleaned.replace(/\s+/g, '');
+    
+    // Eliminar signos de peso ($)
+    cleaned = cleaned.replace(/\$/g, '');
+    
+    // Eliminar puntos (separadores de miles)
+    cleaned = cleaned.replace(/\./g, '');
+    
+    // Reemplazar coma (separador decimal) por punto para parseFloat
+    cleaned = cleaned.replace(/,/g, '.');
+    
+    // Parsear el valor
+    const parsed = parseFloat(cleaned) || 0;
+    
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1} - Valor original: "${valueStr}", Limpiado: "${cleaned}", Parseado: ${parsed}`);
+    }
+    
+    return parsed;
+  };
+
+  // Parsear Débito y Crédito
+  const debito = parseMonetaryValue(debitoStr);
+  const credito = parseMonetaryValue(creditoStr);
+
+  if (index < 3) {
+    console.log(`[Banco Occidente] Fila ${index + 1} - Débito: ${debito}, Crédito: ${credito}`);
+  }
+
+  // Calcular Valor = Débito - Crédito
+  const valor = debito - credito;
+
+  // Validar que al menos uno de los valores (débito o crédito) sea diferente de cero
+  if (debito === 0 && credito === 0) {
+    if (index < 3) {
+      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Transacción sin valor (débito y crédito en 0)`);
+    }
+    return null; // Transacción sin valor
+  }
+
+  if (index < 3) {
+    console.log(`[Banco Occidente] Fila ${index + 1} - Valor calculado: ${valor}`);
+  }
+
+  const transaction: BankTransaction = {
+    cuenta: '', // No disponible en este formato
+    iniciales: '', // No disponible en este formato
+    fecha,
+    valor,
+    codigo: numeroDocumento || '', // Usar número de documento como código
+    descripcion: nombreTransaccion || 'Sin descripción', // Usar nombre de transacción como descripción
+    originalIndex: index,
+  };
+  
+  // Marcar si es un gasto bancario
+  transaction.isBankExpense = isBankExpense(transaction, bankType);
+  
+  return transaction;
 }
 
 /**
@@ -512,13 +688,146 @@ function parseDaviviendaRow(row: any, index: number, bankType: BankType = 'daviv
 }
 
 /**
- * Parsea un archivo Excel del banco (para bancos que usan Excel como Davivienda)
+ * Parsea un archivo Excel del banco (para bancos que usan Excel como Davivienda y Banco de Occidente)
  */
 export async function parseExcelBank(file: File, bankType: BankType): Promise<BankTransaction[]> {
   if (bankType === 'davivienda') {
     return parseExcelDavivienda(file);
   }
+  if (bankType === 'banco_occidente') {
+    return parseExcelBancoOccidente(file);
+  }
   throw new Error(`El banco ${bankType} no usa archivos Excel para extractos bancarios`);
+}
+
+/**
+ * Parsea un archivo Excel de Banco de Occidente
+ * Los datos comienzan en la fila 7 (índice 6)
+ * Columnas por posición (11 columnas totales):
+ * - Columna 1 (índice 0): Fecha en formato yyyy/mm/dd
+ * - Columna 3 (índice 2): Nombre de transacción
+ * - Columna 4 (índice 3): Número de documento
+ * - Columna 5 (índice 4): Débito (string con formato "$ 111.827,59")
+ * - Columna 6 (índice 5): Crédito (string con formato "$ 111.827,59")
+ * Calcula: Valor = Débito - Crédito
+ */
+async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> {
+  const errors: string[] = [];
+  
+  try {
+    // Convertir File a ArrayBuffer
+    let arrayBuffer: ArrayBuffer;
+    try {
+      arrayBuffer = await file.arrayBuffer();
+    } catch (error) {
+      const errorMsg = 'No se pudo leer el archivo Excel. Verifica que el archivo no esté corrupto.';
+      console.error(errorMsg, error);
+      throw new Error(errorMsg);
+    }
+    
+    const data = new Uint8Array(arrayBuffer);
+    let workbook: XLSX.WorkBook;
+    try {
+      workbook = XLSX.read(data, { type: 'array' });
+    } catch (error) {
+      const errorMsg = 'El archivo Excel no es válido o está corrupto. Verifica que sea un archivo .xlsx o .xls válido.';
+      console.error(errorMsg, error);
+      throw new Error(errorMsg);
+    }
+    
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      const errorMsg = 'El archivo Excel no contiene hojas. Verifica que el archivo tenga al menos una hoja con datos.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Obtener la primera hoja
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    if (!worksheet) {
+      const errorMsg = `No se pudo leer la hoja "${firstSheetName}". Verifica que la hoja contenga datos.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Convertir a JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    
+    if (!jsonData || jsonData.length === 0) {
+      const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    console.log('=== PARSE EXCEL BANCO OCCIDENTE ===');
+    console.log('Total de filas:', jsonData.length);
+    
+    const transactions: BankTransaction[] = [];
+    
+    // Los datos comienzan en la fila 7 (índice 6)
+    const startRowIndex = 6;
+    
+    if (jsonData.length <= startRowIndex) {
+      const errorMsg = `El archivo Excel no tiene suficientes filas. Se esperaba que los datos comenzaran en la fila 7 (índice ${startRowIndex}), pero el archivo solo tiene ${jsonData.length} filas.`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    // Procesar filas de datos (empezar desde la fila 7)
+    let rowsProcessed = 0;
+    let rowsRejected = 0;
+    
+    for (let i = startRowIndex; i < jsonData.length; i++) {
+      const row = jsonData[i] as any[];
+      if (!Array.isArray(row) || row.length === 0) {
+        continue;
+      }
+      
+      rowsProcessed++;
+      
+      // Usar la función parseBancoOccidenteRow que ya existe
+      // Ajustar el índice para que sea relativo a las filas de datos (empezando desde 0)
+      const adjustedIndex = i - startRowIndex;
+      const transaction = parseBancoOccidenteRow(row, adjustedIndex, 'banco_occidente');
+      
+      if (transaction) {
+        transactions.push(transaction);
+      } else {
+        rowsRejected++;
+        if (rowsRejected <= 5) {
+          console.log(`Fila ${i + 1} (ajustada: ${adjustedIndex + 1}) rechazada:`, row);
+        }
+      }
+    }
+    
+    console.log('=== RESUMEN BANCO OCCIDENTE ===');
+    console.log('Filas procesadas:', rowsProcessed);
+    console.log('Filas rechazadas:', rowsRejected);
+    console.log('Transacciones válidas:', transactions.length);
+    
+    if (transactions.length === 0) {
+      let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel de Banco de Occidente.';
+      if (errors.length > 0) {
+        errorMsg += '\n\nErrores encontrados:\n' + errors.slice(0, 5).join('\n');
+        if (errors.length > 5) {
+          errorMsg += `\n... y ${errors.length - 5} errores más.`;
+        }
+      }
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    
+    if (errors.length > 0) {
+      console.warn('Advertencias al procesar Banco de Occidente:', errors);
+    }
+    
+    return transactions;
+  } catch (error) {
+    const errorMessage = `Error al parsear Excel de Banco de Occidente: ${error instanceof Error ? error.message : 'Error desconocido'}`;
+    console.error(errorMessage, error);
+    throw new Error(errorMessage);
+  }
 }
 
 /**

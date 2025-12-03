@@ -19,12 +19,24 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Limpiar archivo del banco cuando cambia el banco seleccionado
+  // Limpiar archivo del banco cuando cambia el banco seleccionado y el tipo de archivo no es compatible
   useEffect(() => {
-    setCsvFile(null);
+    if (csvFile) {
+      const fileName = csvFile.name.toLowerCase();
+      const isCsvOrTxt = fileName.endsWith('.csv') || fileName.endsWith('.txt');
+      const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+
+      if ((selectedBank === 'davivienda' || selectedBank === 'banco_occidente') && !isExcel) {
+        setCsvFile(null);
+      } else if (selectedBank === 'banco_bogota' && !isCsvOrTxt) {
+        setCsvFile(null);
+      } else if (selectedBank === 'bancolombia' && !fileName.endsWith('.csv')) {
+        setCsvFile(null);
+      }
+    }
     setResult(null);
     setError(null);
-  }, [selectedBank]);
+  }, [selectedBank, csvFile]);
 
   const handleReconcile = async () => {
     if (!csvFile || !excelFile) {
@@ -194,13 +206,13 @@ export default function Home() {
             <div className="grid md:grid-cols-2 gap-6 mb-8">
             <FileUpload
               label={
-                selectedBank === 'davivienda'
+                selectedBank === 'davivienda' || selectedBank === 'banco_occidente'
                   ? 'Extracto Bancario (Excel)'
                   : selectedBank === 'banco_bogota'
                   ? 'Extracto Bancario (CSV o TXT)'
                   : 'Extracto Bancario (CSV)'
               }
-              accept={selectedBank === 'davivienda' ? '.xlsx,.xls' : '.csv'}
+              accept={(selectedBank === 'davivienda' || selectedBank === 'banco_occidente') ? '.xlsx,.xls' : '.csv'}
               file={csvFile}
               onFileChange={setCsvFile}
               error={error && !csvFile ? error : undefined}
