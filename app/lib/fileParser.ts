@@ -37,7 +37,14 @@ export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
     'COMISION', // Cualquier descripción que incluya la palabra "COMISION"
   ],
   banco_bogota: [
-    // TODO: Agregar conceptos cuando se conozcan
+    'Comision transferencia canal electronico',
+    'Gravamen Movimientos Financieros',
+    'Cargo IVA',
+    'Comision dispersion pago de nomina',
+    'Intereses por sobregiro',
+    'Recobro de Comision',
+    'Comision dispersion'
+    
   ],
   davivienda: [
     'Gmf Gravamen Mvto Financiero - Nota Débito',
@@ -187,10 +194,22 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
             console.log('Transacciones válidas:', transactions.length);
             
             if (transactions.length === 0) {
-              console.error('⚠️ No se encontraron transacciones válidas');
+              let errorMsg = '⚠️ No se encontraron transacciones válidas';
               if (hasHeaders && results.data.length > 0) {
-                console.error('Ejemplo de fila rechazada:', results.data[0]);
+                errorMsg += '\n\nEjemplo de fila rechazada:';
+                console.error(errorMsg, results.data[0]);
+                if (results.meta && results.meta.fields) {
+                  console.error('Encabezados detectados:', results.meta.fields);
+                }
+              } else if (!hasHeaders && results.data.length > 0) {
+                console.error(errorMsg);
+                console.error('Primera fila (sin encabezados):', results.data[0]);
               }
+              
+              // Lanzar error más descriptivo
+              const detailedError = `No se encontraron transacciones válidas en el archivo. Se procesaron ${rowsProcessed} filas pero todas fueron rechazadas. Verifica que el archivo tenga el formato correcto.`;
+              reject(new Error(detailedError));
+              return;
             }
 
             resolve(transactions);
@@ -480,45 +499,84 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
 
   // Extraer valores del objeto - buscar todas las variaciones posibles de nombres de columnas
   // Papa.parse puede normalizar los nombres, así que buscamos con y sin espacios, con y sin acentos
+  // También maneja caracteres mal codificados
   const getValue = (variations: string[]): string => {
     const rowAny = row as any; // Type assertion para permitir indexación dinámica
+    const rowKeys = Object.keys(row);
+    
+    // Primero intentar búsqueda exacta
     for (const variation of variations) {
-      // Buscar exacto
-      if (rowAny[variation] !== undefined && rowAny[variation] !== null && rowAny[variation] !== '') {
+      if (rowAny[variation] !== undefined && rowAny[variation] !== null) {
         const value = String(rowAny[variation]).trim();
-        if (index < 3 && value) {
-          console.log(`  ✓ Encontrado "${variation}": "${value}"`);
+        if (index < 3) {
+          console.log(`  ✓ Encontrado (exacto) "${variation}": "${value}"`);
         }
         return value;
       }
-      // Buscar case-insensitive
-      const lowerVariation = variation.toLowerCase();
-      for (const key of Object.keys(row)) {
-        if (key.toLowerCase() === lowerVariation) {
+    }
+    
+    // Función para normalizar strings (eliminar acentos, espacios, case-insensitive)
+    const normalize = (str: string): string => {
+      return str.toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ')
+        // Reemplazar caracteres mal codificados comunes (caracteres de reemplazo Unicode)
+        .replace(/\uFFFD/g, '') // Caracter de reemplazo Unicode
+        .replace(/[áàäâ]/g, 'a')
+        .replace(/[éèëê]/g, 'e')
+        .replace(/[íìïî]/g, 'i')
+        .replace(/[óòöô]/g, 'o')
+        .replace(/[úùüû]/g, 'u')
+        .replace(/[ñ]/g, 'n');
+    };
+    
+    // Luego buscar case-insensitive y con normalización
+    for (const variation of variations) {
+      const normalizedVariation = normalize(variation);
+      
+      for (const key of rowKeys) {
+        const normalizedKey = normalize(key);
+        
+        // Buscar coincidencia exacta después de normalización
+        if (normalizedKey === normalizedVariation) {
           const value = String(rowAny[key]).trim();
-          if (index < 3 && value) {
-            console.log(`  ✓ Encontrado (case-insensitive) "${key}" (buscaba "${variation}"): "${value}"`);
+          if (index < 3) {
+            console.log(`  ✓ Encontrado (normalizado) "${key}" (buscaba "${variation}"): "${value}"`);
+          }
+          return value;
+        }
+        
+        // Buscar si la clave contiene la variación o viceversa (después de normalizar)
+        if (normalizedKey.includes(normalizedVariation) || normalizedVariation.includes(normalizedKey)) {
+          const value = String(rowAny[key]).trim();
+          if (index < 3) {
+            console.log(`  ✓ Encontrado (parcial normalizado) "${key}" (buscaba "${variation}"): "${value}"`);
           }
           return value;
         }
       }
     }
+    
     if (index < 3) {
       console.log(`  ✗ No encontrado en variaciones:`, variations);
+      console.log(`  Claves disponibles en la fila:`, rowKeys);
+      // Mostrar claves normalizadas para debugging
+      console.log(`  Claves normalizadas:`, rowKeys.map(k => `${k} -> ${normalize(k)}`));
     }
     return '';
   };
 
   const fechaStr = getValue([
     'Fecha', 'fecha', 'FECHA',
-    ' Fecha', ' Fecha ', 'Fecha ',
-    'Fecha', 'fecha'
+    ' Fecha', ' Fecha ', 'Fecha '
   ]);
   
+  // Buscar "Transacción" con y sin acentos, y también con caracteres mal codificados
   const transaccion = getValue([
     'Transacción', 'Transaccion', 'transacción', 'transaccion', 'TRANSACCIÓN', 'TRANSACCION',
     ' Transacción', ' Transaccion', 'Transacción ', 'Transaccion ',
-    'Transacción', 'Transaccion'
+    // Manejar caracteres mal codificados ()
+    'Transaccin', 'Transaccion', 'TRANSACCIN', 'TRANSACCION'
   ]);
   
   const oficina = getValue([
@@ -531,16 +589,20 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     ' Documento', ' Documento ', 'Documento '
   ]);
   
+  // Buscar "Débito" con y sin acentos, y también con caracteres mal codificados
   const debitoStr = getValue([
     'Débito', 'Debito', 'débito', 'debito', 'DÉBITO', 'DEBITO',
     ' Débito', ' Debito', 'Débito ', 'Debito ',
-    'Débito', 'Debito'
+    // Manejar caracteres mal codificados ()
+    'Dbito', 'Debito', 'DBITO', 'DEBITO'
   ]) || '0';
   
+  // Buscar "Crédito" con y sin acentos, y también con caracteres mal codificados
   const creditoStr = getValue([
     'Crédito', 'Credito', 'crédito', 'credito', 'CRÉDITO', 'CREDITO',
     ' Crédito', ' Credito', 'Crédito ', 'Credito ',
-    'Crédito', 'Credito'
+    // Manejar caracteres mal codificados ()
+    'Crdito', 'Credito', 'CRDITO', 'CREDITO'
   ]) || '0';
 
   if (index < 3) {
@@ -556,17 +618,20 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
 
   // Validar que tengamos los campos esenciales
   if (!fechaStr) {
-    if (index < 3) {
+    if (index < 10) { // Aumentar el número de filas con logging detallado
       console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Fecha vacía`);
+      console.log(`  Fecha encontrada: "${fechaStr}"`);
+      console.log(`  Transacción: "${transaccion}"`);
+      console.log(`  Débito: "${debitoStr}", Crédito: "${creditoStr}"`);
     }
     return null;
   }
 
-  // Parsear fecha (puede venir en diferentes formatos: MM/YY, dd/mm/yyyy, yyyy-mm-dd, etc.)
+  // Parsear fecha (formato mm/dd, año 2025)
   let fecha: Date;
   try {
-    // Intentar diferentes formatos de fecha
-    const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
+    // Limpiar la fecha: eliminar comillas si las hay
+    const fechaStrClean = fechaStr.replace(/['"]/g, '').trim();
     
     if (index < 3) {
       console.log(`[Banco Bogotá] Fila ${index + 1} - Parseando fecha: "${fechaStrClean}"`);
@@ -579,8 +644,17 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     if (matchMMDD) {
       const month = parseInt(matchMMDD[1], 10) - 1; // Mes es 0-indexed
       const day = parseInt(matchMMDD[2], 10);
-      const year = 2025; // Año actual
+      const year = 2025; // Año fijo 2025
       fecha = new Date(year, month, day);
+      
+      // Validar que la fecha sea válida
+      if (isNaN(fecha.getTime()) || 
+          fecha.getDate() !== day || 
+          fecha.getMonth() !== month || 
+          fecha.getFullYear() !== year) {
+        throw new Error('Fecha inválida');
+      }
+      
       if (index < 3) {
         console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (MM/DD, año 2025):`, fecha);
       }
@@ -634,13 +708,34 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
   }
 
   // Parsear Débito y Crédito
-  // Manejar strings vacíos y valores con comillas y puntos como separadores de miles
-  const debitoClean = debitoStr.replace(/['"]/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
-  const creditoClean = creditoStr.replace(/['"]/g, '').replace(/\./g, '').replace(/,/g, '.').trim();
+  // Formato: puede venir como "385.00" (punto decimal) o vacío ""
+  // Limpiar: eliminar comillas, manejar punto como separador decimal
+  const parseMonetaryValue = (valueStr: string): number => {
+    if (!valueStr || valueStr.trim() === '') {
+      return 0;
+    }
+    
+    // Limpiar: eliminar comillas y espacios
+    let cleaned = valueStr.replace(/['"]/g, '').trim();
+    
+    // Si está vacío después de limpiar, retornar 0
+    if (cleaned === '') {
+      return 0;
+    }
+    
+    // El formato puede ser con punto decimal (ej: "385.00")
+    // Parsear directamente con parseFloat
+    const parsed = parseFloat(cleaned) || 0;
+    
+    if (index < 3) {
+      console.log(`[Banco Bogotá] Fila ${index + 1} - Valor original: "${valueStr}", Limpiado: "${cleaned}", Parseado: ${parsed}`);
+    }
+    
+    return parsed;
+  };
   
-  // Si está vacío, usar 0
-  const debito = debitoClean === '' ? 0 : parseFloat(debitoClean) || 0;
-  const credito = creditoClean === '' ? 0 : parseFloat(creditoClean) || 0;
+  const debito = parseMonetaryValue(debitoStr);
+  const credito = parseMonetaryValue(creditoStr);
 
   if (index < 3) {
     console.log(`[Banco Bogotá] Fila ${index + 1} - Débito: ${debito}, Crédito: ${credito}`);
@@ -651,8 +746,10 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
 
   // Validar que al menos uno de los valores (débito o crédito) sea diferente de cero
   if (debito === 0 && credito === 0) {
-    if (index < 3) {
+    if (index < 10) { // Aumentar el número de filas con logging detallado
       console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Transacción sin valor (débito y crédito en 0)`);
+      console.log(`  Débito original: "${debitoStr}" -> ${debito}`);
+      console.log(`  Crédito original: "${creditoStr}" -> ${credito}`);
     }
     return null; // Transacción sin valor
   }
