@@ -34,6 +34,26 @@ export interface ReconciliationResult {
     bankExpensesTotal: number;
     matchPercentage: number;
   };
+  aiAnalysis?: {
+    summary: string;
+    deviations: Array<{
+      type: 'difference' | 'unmatched' | 'summary';
+      severity: 'low' | 'medium' | 'high' | 'critical';
+      description: string;
+      recommendation: string;
+      details?: {
+        transaction?: {
+          bankValue?: number;
+          erpValue?: number;
+          difference?: number;
+          bankDescription?: string;
+          erpDescription?: string;
+          date?: string;
+        };
+      };
+    }>;
+    recommendations: string[];
+  };
 }
 
 /**
