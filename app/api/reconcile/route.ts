@@ -116,6 +116,9 @@ export async function POST(request: NextRequest) {
       tolerance,
       bankType
     );
+
+    // Metadata para que el análisis con IA conozca el contexto (banco / tolerancia / modo)
+    result.meta = { bankType, useDate, tolerance };
     
     return NextResponse.json(result);
   } catch (error) {

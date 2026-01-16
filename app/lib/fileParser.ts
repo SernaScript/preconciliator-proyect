@@ -332,7 +332,8 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
   }
 
   // Extraer valores por posición (índices)
-  const fechaStr = String(row[0] || '').trim(); // Columna 1 (índice 0): Fecha
+  // La fecha puede venir como string "2025/12/30" o como objeto Date de Excel
+  let fechaCell = row[0];
   const nombreTransaccion = String(row[2] || '').trim(); // Columna 3 (índice 2): Nombre de transacción
   const numeroDocumento = String(row[3] || '').trim(); // Columna 4 (índice 3): Número de documento
   const debitoStr = String(row[4] || '').trim(); // Columna 5 (índice 4): Débito
@@ -340,7 +341,8 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
 
   if (index < 3) {
     console.log(`[Banco Occidente] Fila ${index + 1} - Valores extraídos:`, {
-      fechaStr,
+      fechaCell,
+      fechaCellType: typeof fechaCell,
       nombreTransaccion,
       numeroDocumento,
       debitoStr,
@@ -348,57 +350,67 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
     });
   }
 
-  // Validar que tengamos los campos esenciales
-  if (!fechaStr) {
-    if (index < 3) {
-      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Fecha vacía`);
-    }
-    return null;
-  }
-
-  // Parsear fecha (formato yyyy/mm/dd)
+  // Parsear fecha (formato yyyy/mm/dd o como objeto Date de Excel)
   let fecha: Date;
   try {
-    const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
-    
-    if (index < 3) {
-      console.log(`[Banco Occidente] Fila ${index + 1} - Parseando fecha: "${fechaStrClean}"`);
-    }
-    
-    // Formato yyyy/mm/dd
-    const datePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/;
-    const match = fechaStrClean.match(datePattern);
-    
-    if (match) {
-      const year = parseInt(match[1], 10);
-      const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
-      const day = parseInt(match[3], 10);
-      fecha = new Date(year, month, day);
-      
-      // Validar que la fecha sea válida
-      if (isNaN(fecha.getTime()) || 
-          fecha.getDate() !== day || 
-          fecha.getMonth() !== month || 
-          fecha.getFullYear() !== year) {
-        throw new Error('Fecha inválida');
-      }
-      
+    // Si la fecha viene como objeto Date de Excel, convertirla
+    if (fechaCell instanceof Date) {
+      fecha = fechaCell;
       if (index < 3) {
-        console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (yyyy/mm/dd):`, fecha);
+        console.log(`[Banco Occidente] Fila ${index + 1} - Fecha recibida como objeto Date:`, fecha);
       }
     } else {
-      // Intentar parsear como fecha estándar
-      fecha = new Date(fechaStrClean);
-      if (isNaN(fecha.getTime())) {
-        throw new Error('Formato de fecha no reconocido');
+      // Convertir a string y limpiar
+      const fechaStr = String(fechaCell || '').trim();
+      
+      if (!fechaStr || fechaStr === '') {
+        if (index < 3) {
+          console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Fecha vacía`);
+        }
+        return null;
       }
+      
+      const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
+      
       if (index < 3) {
-        console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (estándar):`, fecha);
+        console.log(`[Banco Occidente] Fila ${index + 1} - Parseando fecha string: "${fechaStrClean}"`);
+      }
+      
+      // Formato yyyy/mm/dd (ejemplo: 2025/12/30)
+      const datePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/;
+      const match = fechaStrClean.match(datePattern);
+      
+      if (match) {
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
+        const day = parseInt(match[3], 10);
+        fecha = new Date(year, month, day);
+        
+        // Validar que la fecha sea válida
+        if (isNaN(fecha.getTime()) || 
+            fecha.getDate() !== day || 
+            fecha.getMonth() !== month || 
+            fecha.getFullYear() !== year) {
+          throw new Error(`Fecha inválida: ${year}/${month + 1}/${day}`);
+        }
+        
+        if (index < 3) {
+          console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (yyyy/mm/dd):`, fecha, `(${year}/${month + 1}/${day})`);
+        }
+      } else {
+        // Intentar parsear como fecha estándar de JavaScript
+        fecha = new Date(fechaStrClean);
+        if (isNaN(fecha.getTime())) {
+          throw new Error(`Formato de fecha no reconocido: "${fechaStrClean}". Se esperaba formato yyyy/mm/dd (ej: 2025/12/30)`);
+        }
+        if (index < 3) {
+          console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (estándar):`, fecha);
+        }
       }
     }
   } catch (error) {
     if (index < 3) {
-      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Error al parsear fecha "${fechaStr}":`, error);
+      console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Error al parsear fecha "${fechaCell}":`, error);
     }
     return null; // Error al parsear fecha
   }
@@ -443,8 +455,9 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
     console.log(`[Banco Occidente] Fila ${index + 1} - Débito: ${debito}, Crédito: ${credito}`);
   }
 
-  // Calcular Valor = Débito - Crédito
-  const valor = debito - credito;
+  // Calcular Valor = Crédito - Débito
+  // Para Banco de Occidente: Créditos son entradas (positivas), Débitos son salidas (negativas)
+  const valor = credito - debito;
 
   // Validar que al menos uno de los valores (débito o crédito) sea diferente de cero
   if (debito === 0 && credito === 0) {
@@ -848,8 +861,23 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       throw new Error(errorMsg);
     }
     
-    // Convertir a JSON
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    // Convertir a JSON - leer TODAS las filas sin límite
+    // Usar range para asegurar que lea todas las celdas
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    console.log('=== PARSE EXCEL BANCO OCCIDENTE ===');
+    console.log('Rango de la hoja:', worksheet['!ref']);
+    console.log('Última fila según rango:', range.e.r + 1);
+    console.log('Última columna según rango:', range.e.c + 1);
+    
+    // Leer todas las filas, incluyendo las vacías al final
+    // raw: true para mantener las fechas como están (no convertirlas automáticamente)
+    // Esto es importante porque las fechas vienen como "2025/12/30" y queremos mantener ese formato
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1, 
+      defval: '',
+      blankrows: true, // Incluir filas vacías
+      raw: true // Mantener valores raw para fechas (no convertir automáticamente)
+    });
     
     if (!jsonData || jsonData.length === 0) {
       const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
@@ -857,8 +885,9 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       throw new Error(errorMsg);
     }
     
-    console.log('=== PARSE EXCEL BANCO OCCIDENTE ===');
-    console.log('Total de filas:', jsonData.length);
+    console.log('Total de filas leídas por XLSX:', jsonData.length);
+    console.log('Primeras 3 filas:', jsonData.slice(0, 3));
+    console.log('Últimas 3 filas:', jsonData.slice(-3));
     
     const transactions: BankTransaction[] = [];
     
@@ -874,13 +903,38 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
     // Procesar filas de datos (empezar desde la fila 7)
     let rowsProcessed = 0;
     let rowsRejected = 0;
+    let emptyRowsSkipped = 0;
+    let lastValidRowIndex = -1;
+    
+    // Procesar todas las filas hasta encontrar filas completamente vacías consecutivas
+    // Si encontramos 10 filas vacías consecutivas, asumimos que terminó el archivo
+    let consecutiveEmptyRows = 0;
+    const maxConsecutiveEmptyRows = 10;
     
     for (let i = startRowIndex; i < jsonData.length; i++) {
       const row = jsonData[i] as any[];
-      if (!Array.isArray(row) || row.length === 0) {
+      
+      // Verificar si la fila está completamente vacía
+      const isRowEmpty = !Array.isArray(row) || row.length === 0 || 
+                        row.every(cell => cell === null || cell === undefined || 
+                        (typeof cell === 'string' && cell.trim() === '') ||
+                        cell === '');
+      
+      if (isRowEmpty) {
+        consecutiveEmptyRows++;
+        emptyRowsSkipped++;
+        
+        // Si encontramos muchas filas vacías consecutivas, podríamos haber llegado al final
+        // Pero continuamos procesando por si hay más datos después
+        if (consecutiveEmptyRows >= maxConsecutiveEmptyRows && lastValidRowIndex >= 0) {
+          console.log(`[Banco Occidente] Detectadas ${consecutiveEmptyRows} filas vacías consecutivas después de la fila ${lastValidRowIndex + 1}. Continuando procesamiento...`);
+          // No detenemos el procesamiento, solo registramos
+        }
         continue;
       }
       
+      // Resetear contador de filas vacías si encontramos una fila con datos
+      consecutiveEmptyRows = 0;
       rowsProcessed++;
       
       // Usar la función parseBancoOccidenteRow que ya existe
@@ -890,18 +944,37 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       
       if (transaction) {
         transactions.push(transaction);
+        lastValidRowIndex = i;
+        
+        // Log cada 100 transacciones para monitorear el progreso
+        if (transactions.length % 100 === 0) {
+          console.log(`[Banco Occidente] Procesadas ${transactions.length} transacciones válidas hasta la fila ${i + 1}`);
+        }
       } else {
         rowsRejected++;
-        if (rowsRejected <= 5) {
-          console.log(`Fila ${i + 1} (ajustada: ${adjustedIndex + 1}) rechazada:`, row);
+        if (rowsRejected <= 10) {
+          console.log(`[Banco Occidente] Fila ${i + 1} (ajustada: ${adjustedIndex + 1}) rechazada. Valores:`, {
+            fecha: row[0],
+            col2: row[1],
+            nombreTransaccion: row[2],
+            numeroDocumento: row[3],
+            debito: row[4],
+            credito: row[5],
+            rowLength: row.length
+          });
         }
       }
     }
     
     console.log('=== RESUMEN BANCO OCCIDENTE ===');
-    console.log('Filas procesadas:', rowsProcessed);
-    console.log('Filas rechazadas:', rowsRejected);
+    console.log('Total de filas en el archivo:', jsonData.length);
+    console.log('Fila de inicio (índice):', startRowIndex);
+    console.log('Última fila procesada:', jsonData.length - 1);
+    console.log('Filas procesadas (con datos):', rowsProcessed);
+    console.log('Filas vacías saltadas:', emptyRowsSkipped);
+    console.log('Filas rechazadas (formato inválido):', rowsRejected);
     console.log('Transacciones válidas:', transactions.length);
+    console.log('Última fila válida encontrada:', lastValidRowIndex >= 0 ? lastValidRowIndex + 1 : 'N/A');
     
     if (transactions.length === 0) {
       let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel de Banco de Occidente.';

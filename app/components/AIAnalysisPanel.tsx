@@ -13,7 +13,7 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
     return null;
   }
 
-  const { summary, deviations, recommendations } = result.aiAnalysis;
+  const { summary, totalDifference, deviations, recommendations } = result.aiAnalysis;
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -126,7 +126,16 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
         doc.text(line, margin, yPosition);
         yPosition += 6;
       });
-      yPosition += 10;
+      
+      // Diferencia total si está disponible
+      if (result.aiAnalysis.totalDifference !== undefined) {
+        yPosition += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Diferencia Total Acumulada: ${formatCurrency(result.aiAnalysis.totalDifference)}`, margin, yPosition);
+        yPosition += 8;
+      } else {
+        yPosition += 10;
+      }
 
       // Desviaciones
       if (result.aiAnalysis.deviations && result.aiAnalysis.deviations.length > 0) {
@@ -151,7 +160,9 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
           const typeLabels: Record<string, string> = {
             'difference': 'Diferencia en Valores',
             'unmatched': 'Transacción No Conciliada',
-            'distributed_payment': 'Pago Distribuido (Pexto Colombia)',
+            'unmatched_bank': 'Transacción Banco Sin Coincidencia',
+            'unmatched_erp': 'Transacción ERP Sin Coincidencia',
+            'distributed_payment': 'Pago Distribuido (Banco ↔ ERP)',
             'summary': 'Resumen'
           };
           const severityLabels: Record<string, string> = {
@@ -178,18 +189,46 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
           });
           yPosition += 5;
 
+          // Posibles causas
+          if (deviation.possibleCauses && deviation.possibleCauses.length > 0) {
+            doc.setFont('helvetica', 'bold');
+            doc.text('Posibles causas:', margin, yPosition);
+            yPosition += 6;
+            doc.setFont('helvetica', 'normal');
+            deviation.possibleCauses.forEach((cause: string) => {
+              checkPageBreak(6);
+              doc.text(`• ${cause}`, margin + 5, yPosition);
+              yPosition += 5;
+            });
+            yPosition += 3;
+          }
+
+          // Total del grupo y cantidad
+          if (deviation.groupTotal !== undefined) {
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Total del grupo: ${formatCurrency(deviation.groupTotal)}`, margin, yPosition);
+            yPosition += 6;
+          }
+          if (deviation.count !== undefined) {
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Cantidad de casos: ${deviation.count}`, margin, yPosition);
+            yPosition += 6;
+          }
+
           // Recomendación
-          doc.setFont('helvetica', 'bold');
-          doc.text('Recomendación:', margin, yPosition);
-          yPosition += 6;
-          doc.setFont('helvetica', 'normal');
-          const recLines = doc.splitTextToSize(deviation.recommendation, maxWidth);
-          recLines.forEach((line: string) => {
-            checkPageBreak(6);
-            doc.text(line, margin, yPosition);
+          if (deviation.recommendation) {
+            doc.setFont('helvetica', 'bold');
+            doc.text('Recomendación:', margin, yPosition);
+            yPosition += 6;
+            doc.setFont('helvetica', 'normal');
+            const recLines = doc.splitTextToSize(deviation.recommendation, maxWidth);
+            recLines.forEach((line: string) => {
+              checkPageBreak(6);
+              doc.text(line, margin, yPosition);
+              yPosition += 5;
+            });
             yPosition += 5;
-          });
-          yPosition += 5;
+          }
 
           // Detalles de transacción si existen
           if (deviation.details?.transaction) {
@@ -380,7 +419,14 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
             </svg>
             Resumen Ejecutivo
           </h3>
-          <p className="text-gray-700 leading-relaxed">{summary}</p>
+          <p className="text-gray-700 leading-relaxed mb-3">{summary}</p>
+          {totalDifference !== undefined && (
+            <div className="mt-3 pt-3 border-t border-blue-300">
+              <p className="text-sm font-semibold text-gray-800">
+                Diferencia Total Acumulada: <span className="text-blue-700">{formatCurrency(totalDifference)}</span>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Desviaciones */}
@@ -423,11 +469,37 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
                         <span className="text-xs font-medium opacity-75">
                           {deviation.type === 'difference' && 'Diferencia en Valores'}
                           {deviation.type === 'unmatched' && 'Transacción No Conciliada'}
-                          {deviation.type === 'distributed_payment' && 'Pago Distribuido (Pexto Colombia)'}
+                          {deviation.type === 'unmatched_bank' && 'Transacción Banco Sin Coincidencia'}
+                          {deviation.type === 'unmatched_erp' && 'Transacción ERP Sin Coincidencia'}
+                          {deviation.type === 'distributed_payment' && 'Pago Distribuido (Banco ↔ ERP)'}
                           {deviation.type === 'summary' && 'Resumen'}
                         </span>
+                        {deviation.count !== undefined && (
+                          <span className="text-xs font-medium opacity-75">
+                            ({deviation.count} {deviation.count === 1 ? 'caso' : 'casos'})
+                          </span>
+                        )}
                       </div>
                       <p className="font-medium mb-2">{deviation.description}</p>
+                      {deviation.possibleCauses && deviation.possibleCauses.length > 0 && (
+                        <div className="mt-2 mb-3">
+                          <p className="text-xs font-semibold mb-1">Posibles causas:</p>
+                          <ul className="text-xs space-y-1">
+                            {deviation.possibleCauses.map((cause, idx) => (
+                              <li key={idx} className="flex items-start gap-1">
+                                <span className="text-gray-500">•</span>
+                                <span>{cause}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {deviation.groupTotal !== undefined && (
+                        <div className="mt-2 mb-3 text-sm">
+                          <span className="font-semibold">Total del grupo:</span>{' '}
+                          <span className="font-mono">{formatCurrency(deviation.groupTotal)}</span>
+                        </div>
+                      )}
                       {deviation.details?.transaction && (
                         <div className="mt-3 pt-3 border-t border-current/20 text-sm space-y-1">
                           {deviation.details.transaction.bankValue !== undefined && (
@@ -458,12 +530,14 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-current/20">
-                    <p className="text-sm">
-                      <span className="font-semibold">Recomendación:</span>{' '}
-                      {deviation.recommendation}
-                    </p>
-                  </div>
+                  {deviation.recommendation && (
+                    <div className="mt-3 pt-3 border-t border-current/20">
+                      <p className="text-sm">
+                        <span className="font-semibold">Recomendación:</span>{' '}
+                        {deviation.recommendation}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

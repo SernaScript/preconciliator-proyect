@@ -7,6 +7,8 @@ import StatsPanel from './components/StatsPanel';
 import ReconciliationTable from './components/ReconciliationTable';
 import BankSelector from './components/BankSelector';
 import AIAnalysisPanel from './components/AIAnalysisPanel';
+import DeviationTimelinePanel from './components/DeviationTimelinePanel';
+import FullTransactionDetailsPanel from './components/FullTransactionDetailsPanel';
 import { ReconciliationResult } from './lib/reconciliation';
 import { BankType } from './lib/fileParser';
 
@@ -431,6 +433,20 @@ export default function Home() {
               {result.aiAnalysis && (
                 <div className="mb-8">
                   <AIAnalysisPanel result={result} />
+                </div>
+              )}
+
+              {/* Deviation Timeline Panel */}
+              {(result.unmatchedBank.length > 0 || result.unmatchedERP.length > 0 || result.matched.some(m => m.difference > 0)) && (
+                <div className="mb-8">
+                  <DeviationTimelinePanel result={result} />
+                </div>
+              )}
+
+              {/* Full Transaction Details Panel */}
+              {(result.unmatchedBank.length > 0 || result.unmatchedERP.length > 0) && (
+                <div className="mb-8">
+                  <FullTransactionDetailsPanel result={result} />
                 </div>
               )}
 

@@ -24,6 +24,11 @@ export interface ReconciliationResult {
   unmatchedBank: BankTransaction[];
   unmatchedERP: ERPTransaction[];
   bankExpenses: BankExpense[]; // Gastos bancarios identificados
+  meta?: {
+    bankType?: BankType;
+    useDate?: boolean;
+    tolerance?: number;
+  };
   stats: {
     totalBank: number;
     totalERP: number;
@@ -37,7 +42,7 @@ export interface ReconciliationResult {
   aiAnalysis?: {
     summary: string;
     deviations: Array<{
-      type: 'difference' | 'unmatched' | 'summary';
+      type: 'difference' | 'unmatched' | 'summary' | 'distributed_payment';
       severity: 'low' | 'medium' | 'high' | 'critical';
       description: string;
       recommendation: string;

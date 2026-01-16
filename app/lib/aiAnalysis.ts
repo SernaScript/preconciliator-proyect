@@ -2,10 +2,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ReconciliationResult, ReconciliationMatch } from './reconciliation';
 
 export interface DeviationAnalysis {
-    type: 'difference' | 'unmatched' | 'summary' | 'distributed_payment';
+    type: 'difference' | 'unmatched' | 'unmatched_bank' | 'unmatched_erp' | 'summary' | 'distributed_payment';
     severity: 'low' | 'medium' | 'high' | 'critical';
     description: string;
-    recommendation: string;
+    recommendation?: string;
+    possibleCauses?: string[];
+    groupTotal?: number;
+    count?: number;
     details?: {
         transaction?: {
             bankValue?: number;
@@ -20,6 +23,7 @@ export interface DeviationAnalysis {
 
 export interface AIAnalysisResult {
     summary: string;
+    totalDifference?: number;
     deviations: DeviationAnalysis[];
     recommendations: string[];
 }
@@ -132,55 +136,41 @@ export async function analyzeReconciliationDeviations(
     // el comportamiento del analista de IA. Este prompt se encuentra en:
     // app/lib/aiAnalysis.ts (líneas 45-92)
     // ====================================================================
-    const prompt = `Eres un analista contable experto en conciliación bancaria. Analiza las siguientes desviaciones encontradas en una conciliación y proporciona un análisis detallado.
+    const prompt = `Analiza las desviaciones de conciliación bancaria. Sé conciso y analítico.
 
-DATOS DE LA CONCILIACIÓN:
+DATOS:
 ${analysisData}
 
-INSTRUCCIONES:
-1. Analiza cada desviación identificada (diferencias en pesos/centavos, transacciones no coincidentes)
+REQUERIMIENTOS:
+1. Calcula y reporta la DIFERENCIA TOTAL acumulada de todas las anomalías
+2. Agrupa las desviaciones por TIPO de anomalía:
+   - "difference": Diferencias en valores conciliados
+   - "unmatched_bank": Transacciones del banco sin coincidencia
+   - "unmatched_erp": Transacciones del ERP sin coincidencia
+   - "distributed_payment": Posibles pagos distribuidos (PSE/Pexto Colombia, Banco de Occidente)
+3. Para cada grupo, indica:
+   - Cantidad de casos
+   - Diferencia total del grupo
+   - Posibles causas (máximo 2-3 por grupo, concisas)
+4. Severidad: critical (diferencias grandes), high (pesos significativos), medium (centavos/pequeñas), low (redondeos/pagos distribuidos)
 
-2. CASO ESPECIAL - PAGOS A PEXTO COLOMBIA (PSE):
-   IMPORTANTE: Cuando en el extracto bancario aparece un pago a "PEXTO COLOMBIA" o "PSE" (Pago Seguro en Línea), este puede corresponder a MÚLTIPLES pagos distribuidos en contabilidad.
-   
-   Ejemplo:
-   - Banco: Un pago de $30.000.000 a Pexto Colombia
-   - Contabilidad: Puede estar distribuido como:
-     * $5.000.000 a Proveedor A
-     * $10.000.000 a Proveedor B
-     * $15.000.000 a Proveedor C
-   
-   En este caso:
-   - Si encuentras una transacción no conciliada del banco que sea un pago a Pexto Colombia/PSE
-   - Y hay múltiples transacciones no conciliadas del ERP que sumen un valor similar o igual
-   - Debes identificar esta situación y recomendar verificar si corresponden al mismo pago distribuido
-   - La suma de los pagos del ERP debe coincidir con el pago único del banco
+CASOS ESPECIALES:
+- PSE/Pexto Colombia: Un pago bancario puede corresponder a múltiples pagos en ERP
+- Banco de Occidente: Movimientos grandes pueden ser lotes distribuidos en ERP
+- TRANSACCIONES DISTRIBUIDAS: Una transacción bancaria grande (ej: $100.000.000) puede dividirse en varios pagos en el ERP. Realiza análisis día a día y semana a semana para identificar patrones temporales y agrupar transacciones relacionadas por fecha.
 
-3. Clasifica la severidad de cada desviación:
-   - CRITICAL: Valores que no coinciden para nada o diferencias muy grandes
-   - HIGH: Diferencias significativas en pesos
-   - MEDIUM: Diferencias menores en centavos o pesos pequeños
-   - LOW: Diferencias mínimas que pueden ser redondeos o casos de pagos distribuidos (Pexto Colombia)
-
-4. Para cada desviación, proporciona:
-   - Tipo: "difference" (diferencia en valores conciliados), "unmatched" (transacción sin coincidencia), "distributed_payment" (pago distribuido como Pexto Colombia)
-   - Severidad: low, medium, high, critical
-   - Descripción: Explicación clara del problema, incluyendo si es un posible caso de pago distribuido
-   - Recomendación: Qué acción tomar para resolverlo (si es pago distribuido, indicar que se debe verificar la suma de los pagos del ERP)
-
-5. Proporciona un resumen ejecutivo general
-
-6. Lista las recomendaciones principales, prestando especial atención a posibles casos de pagos distribuidos a Pexto Colombia
-
-Responde SOLO con un JSON válido en el siguiente formato:
+Responde SOLO con JSON válido:
 {
-  "summary": "Resumen ejecutivo general de las desviaciones encontradas",
+  "summary": "Resumen ejecutivo breve (2-3 líneas máximo)",
+  "totalDifference": número,
   "deviations": [
     {
-      "type": "difference" | "unmatched" | "distributed_payment",
+      "type": "difference" | "unmatched_bank" | "unmatched_erp" | "distributed_payment",
       "severity": "low" | "medium" | "high" | "critical",
-      "description": "Descripción detallada de la desviación. Si es un pago distribuido a Pexto Colombia, indica el valor total del banco y la suma de los pagos del ERP.",
-      "recommendation": "Recomendación específica para resolver esta desviación. Si es pago distribuido, indicar que se debe verificar que la suma de los pagos del ERP coincida con el pago único del banco.",
+      "description": "Descripción concisa del problema",
+      "possibleCauses": ["Causa 1", "Causa 2"],
+      "groupTotal": número,
+      "count": número,
       "details": {
         "transaction": {
           "bankValue": número,
@@ -193,13 +183,10 @@ Responde SOLO con un JSON válido en el siguiente formato:
       }
     }
   ],
-  "recommendations": [
-    "Recomendación general 1",
-    "Recomendación general 2"
-  ]
+  "recommendations": ["Recomendación 1", "Recomendación 2"]
 }
 
-IMPORTANTE: Responde ÚNICAMENTE con el JSON, sin texto adicional antes o después.`;
+IMPORTANTE: Responde ÚNICAMENTE con JSON, sin texto adicional.`;
 
     let lastError: Error | null = null;
 
@@ -244,6 +231,19 @@ IMPORTANTE: Responde ÚNICAMENTE con el JSON, sin texto adicional antes o despu�
  */
 function prepareAnalysisData(result: ReconciliationResult): string {
     const lines: string[] = [];
+
+    // Contexto / metadata
+    if (result.meta?.bankType) {
+        lines.push('=== CONTEXTO ===');
+        lines.push(`Banco: ${result.meta.bankType}`);
+        if (typeof result.meta.useDate === 'boolean') {
+            lines.push(`Modo: ${result.meta.useDate ? 'Valores + Fechas' : 'Solo Valores'}`);
+        }
+        if (typeof result.meta.tolerance === 'number') {
+            lines.push(`Tolerancia: ${result.meta.tolerance}`);
+        }
+        lines.push('');
+    }
 
     // Estadísticas generales
     lines.push('=== ESTADÍSTICAS GENERALES ===');
