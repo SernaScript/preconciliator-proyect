@@ -44,7 +44,7 @@ export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
     'Intereses por sobregiro',
     'Recobro de Comision',
     'Comision dispersion'
-    
+
   ],
   davivienda: [
     'Gmf Gravamen Mvto Financiero - Nota Débito',
@@ -62,14 +62,14 @@ export const BANK_EXPENSE_CONCEPTS: Record<BankType, string[]> = {
 export function isBankExpense(transaction: BankTransaction, bankType: BankType = 'bancolombia'): boolean {
   const descripcion = transaction.descripcion.toUpperCase().trim();
   const concepts = BANK_EXPENSE_CONCEPTS[bankType] || BANK_EXPENSE_CONCEPTS.bancolombia;
-  
+
   // Para Banco de Occidente, también verificar si contiene "COMISION"
   if (bankType === 'banco_occidente') {
     if (descripcion.includes('COMISION')) {
       return true;
     }
   }
-  
+
   return concepts.some(concept => descripcion.includes(concept.toUpperCase()));
 }
 
@@ -92,19 +92,19 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
   try {
     // Convertir File a texto para usar en Node.js
     const text = await file.text();
-    
+
     // Banco de Bogotá usa encabezados, los demás no
     const hasHeaders = bankType === 'banco_bogota';
     // Banco de Occidente comienza en la fila 7 (índice 6)
     const startRow = bankType === 'banco_occidente' ? 6 : 0;
-    
+
     console.log('=== INICIO PARSE CSV ===');
     console.log('Banco seleccionado:', bankType);
     console.log('Usa encabezados:', hasHeaders);
     console.log('Fila de inicio:', startRow === 0 ? 'Desde el inicio' : `Fila ${startRow + 1}`);
     console.log('Tamaño del archivo:', text.length, 'caracteres');
     console.log('Primeras 500 caracteres del archivo:', text.substring(0, 500));
-    
+
     return new Promise((resolve, reject) => {
       Papa.parse(text, {
         header: hasHeaders,
@@ -121,7 +121,7 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
             console.log('=== RESULTADOS DEL PARSING ===');
             console.log('Total de filas parseadas:', results.data.length);
             console.log('Errores de parsing:', results.errors);
-            
+
             if (hasHeaders && results.data.length > 0) {
               console.log('Primera fila (con encabezados):', results.data[0]);
               console.log('Claves de la primera fila:', Object.keys(results.data[0] || {}));
@@ -140,14 +140,14 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
             } else if (!hasHeaders && results.data.length > 0) {
               console.log('Primera fila (sin encabezados):', results.data[0]);
             }
-            
+
             const transactions: BankTransaction[] = [];
             let rowsProcessed = 0;
             let rowsRejected = 0;
-            
+
             // Seleccionar el parser según el banco
             const parseRow = getBankParser(bankType);
-            
+
             if (hasHeaders) {
               // Para formato con encabezados (Banco de Bogotá)
               results.data.forEach((row: any, index: number) => {
@@ -172,7 +172,7 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
                 if (bankType === 'banco_occidente' && index < startRow) {
                   return; // Saltar esta fila
                 }
-                
+
                 rowsProcessed++;
                 // Ajustar el índice para Banco de Occidente (restar las filas saltadas)
                 const adjustedIndex = bankType === 'banco_occidente' ? index - startRow : index;
@@ -192,7 +192,7 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
             console.log('Filas procesadas:', rowsProcessed);
             console.log('Filas rechazadas:', rowsRejected);
             console.log('Transacciones válidas:', transactions.length);
-            
+
             if (transactions.length === 0) {
               let errorMsg = '⚠️ No se encontraron transacciones válidas';
               if (hasHeaders && results.data.length > 0) {
@@ -205,7 +205,7 @@ export async function parseCSV(file: File, bankType: BankType = 'bancolombia'): 
                 console.error(errorMsg);
                 console.error('Primera fila (sin encabezados):', results.data[0]);
               }
-              
+
               // Lanzar error más descriptivo
               const detailedError = `No se encontraron transacciones válidas en el archivo. Se procesaron ${rowsProcessed} filas pero todas fueron rechazadas. Verifica que el archivo tenga el formato correcto.`;
               reject(new Error(detailedError));
@@ -281,7 +281,7 @@ function parseBancolombiaRow(row: any, index: number, bankType: BankType = 'banc
     const month = parseInt(fechaStr.substring(4, 6)) - 1; // Mes es 0-indexed
     const day = parseInt(fechaStr.substring(6, 8));
     fecha = new Date(year, month, day);
-    
+
     if (isNaN(fecha.getTime())) {
       return null; // Fecha inválida
     }
@@ -304,10 +304,10 @@ function parseBancolombiaRow(row: any, index: number, bankType: BankType = 'banc
     descripcion,
     originalIndex: index,
   };
-  
+
   // Marcar si es un gasto bancario
   transaction.isBankExpense = isBankExpense(transaction, bankType);
-  
+
   return transaction;
 }
 
@@ -362,38 +362,38 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
     } else {
       // Convertir a string y limpiar
       const fechaStr = String(fechaCell || '').trim();
-      
+
       if (!fechaStr || fechaStr === '') {
         if (index < 3) {
           console.log(`[Banco Occidente] Fila ${index + 1} rechazada: Fecha vacía`);
         }
         return null;
       }
-      
+
       const fechaStrClean = fechaStr.replace(/['"]/g, '').trim(); // Eliminar comillas si las hay
-      
+
       if (index < 3) {
         console.log(`[Banco Occidente] Fila ${index + 1} - Parseando fecha string: "${fechaStrClean}"`);
       }
-      
+
       // Formato yyyy/mm/dd (ejemplo: 2025/12/30)
       const datePattern = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/;
       const match = fechaStrClean.match(datePattern);
-      
+
       if (match) {
         const year = parseInt(match[1], 10);
         const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
         const day = parseInt(match[3], 10);
         fecha = new Date(year, month, day);
-        
+
         // Validar que la fecha sea válida
-        if (isNaN(fecha.getTime()) || 
-            fecha.getDate() !== day || 
-            fecha.getMonth() !== month || 
-            fecha.getFullYear() !== year) {
+        if (isNaN(fecha.getTime()) ||
+          fecha.getDate() !== day ||
+          fecha.getMonth() !== month ||
+          fecha.getFullYear() !== year) {
           throw new Error(`Fecha inválida: ${year}/${month + 1}/${day}`);
         }
-        
+
         if (index < 3) {
           console.log(`[Banco Occidente] Fila ${index + 1} - Fecha parseada (yyyy/mm/dd):`, fecha, `(${year}/${month + 1}/${day})`);
         }
@@ -421,29 +421,29 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
     if (!valueStr || valueStr.trim() === '') {
       return 0;
     }
-    
+
     // Limpiar el valor: eliminar espacios, signos de peso ($), puntos (miles) y convertir coma (decimal) a punto
     let cleaned = valueStr.trim();
-    
+
     // Eliminar espacios
     cleaned = cleaned.replace(/\s+/g, '');
-    
+
     // Eliminar signos de peso ($)
     cleaned = cleaned.replace(/\$/g, '');
-    
+
     // Eliminar puntos (separadores de miles)
     cleaned = cleaned.replace(/\./g, '');
-    
+
     // Reemplazar coma (separador decimal) por punto para parseFloat
     cleaned = cleaned.replace(/,/g, '.');
-    
+
     // Parsear el valor
     const parsed = parseFloat(cleaned) || 0;
-    
+
     if (index < 3) {
       console.log(`[Banco Occidente] Fila ${index + 1} - Valor original: "${valueStr}", Limpiado: "${cleaned}", Parseado: ${parsed}`);
     }
-    
+
     return parsed;
   };
 
@@ -480,10 +480,10 @@ function parseBancoOccidenteRow(row: any, index: number, bankType: BankType = 'b
     descripcion: nombreTransaccion || 'Sin descripción', // Usar nombre de transacción como descripción
     originalIndex: index,
   };
-  
+
   // Marcar si es un gasto bancario
   transaction.isBankExpense = isBankExpense(transaction, bankType);
-  
+
   return transaction;
 }
 
@@ -516,7 +516,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
   const getValue = (variations: string[]): string => {
     const rowAny = row as any; // Type assertion para permitir indexación dinámica
     const rowKeys = Object.keys(row);
-    
+
     // Primero intentar búsqueda exacta
     for (const variation of variations) {
       if (rowAny[variation] !== undefined && rowAny[variation] !== null) {
@@ -527,7 +527,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
         return value;
       }
     }
-    
+
     // Función para normalizar strings (eliminar acentos, espacios, case-insensitive)
     const normalize = (str: string): string => {
       return str.toLowerCase()
@@ -542,14 +542,14 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
         .replace(/[úùüû]/g, 'u')
         .replace(/[ñ]/g, 'n');
     };
-    
+
     // Luego buscar case-insensitive y con normalización
     for (const variation of variations) {
       const normalizedVariation = normalize(variation);
-      
+
       for (const key of rowKeys) {
         const normalizedKey = normalize(key);
-        
+
         // Buscar coincidencia exacta después de normalización
         if (normalizedKey === normalizedVariation) {
           const value = String(rowAny[key]).trim();
@@ -558,7 +558,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
           }
           return value;
         }
-        
+
         // Buscar si la clave contiene la variación o viceversa (después de normalizar)
         if (normalizedKey.includes(normalizedVariation) || normalizedVariation.includes(normalizedKey)) {
           const value = String(rowAny[key]).trim();
@@ -569,7 +569,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
         }
       }
     }
-    
+
     if (index < 3) {
       console.log(`  ✗ No encontrado en variaciones:`, variations);
       console.log(`  Claves disponibles en la fila:`, rowKeys);
@@ -583,7 +583,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     'Fecha', 'fecha', 'FECHA',
     ' Fecha', ' Fecha ', 'Fecha '
   ]);
-  
+
   // Buscar "Transacción" con y sin acentos, y también con caracteres mal codificados
   const transaccion = getValue([
     'Transacción', 'Transaccion', 'transacción', 'transaccion', 'TRANSACCIÓN', 'TRANSACCION',
@@ -591,17 +591,17 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     // Manejar caracteres mal codificados ()
     'Transaccin', 'Transaccion', 'TRANSACCIN', 'TRANSACCION'
   ]);
-  
+
   const oficina = getValue([
     'Oficina', 'oficina', 'OFICINA',
     ' Oficina', ' Oficina ', 'Oficina '
   ]);
-  
+
   const documento = getValue([
     'Documento', 'documento', 'DOCUMENTO',
     ' Documento', ' Documento ', 'Documento '
   ]);
-  
+
   // Buscar "Débito" con y sin acentos, y también con caracteres mal codificados
   const debitoStr = getValue([
     'Débito', 'Debito', 'débito', 'debito', 'DÉBITO', 'DEBITO',
@@ -609,7 +609,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     // Manejar caracteres mal codificados ()
     'Dbito', 'Debito', 'DBITO', 'DEBITO'
   ]) || '0';
-  
+
   // Buscar "Crédito" con y sin acentos, y también con caracteres mal codificados
   const creditoStr = getValue([
     'Crédito', 'Credito', 'crédito', 'credito', 'CRÉDITO', 'CREDITO',
@@ -645,29 +645,29 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
   try {
     // Limpiar la fecha: eliminar comillas si las hay
     const fechaStrClean = fechaStr.replace(/['"]/g, '').trim();
-    
+
     if (index < 3) {
       console.log(`[Banco Bogotá] Fila ${index + 1} - Parseando fecha: "${fechaStrClean}"`);
     }
-    
+
     // Formato MM/DD (mes/día) - Banco de Bogotá usa este formato, año es 2025
     const datePatternMMDD = /^(\d{1,2})\/(\d{1,2})$/;
     const matchMMDD = fechaStrClean.match(datePatternMMDD);
-    
+
     if (matchMMDD) {
       const month = parseInt(matchMMDD[1], 10) - 1; // Mes es 0-indexed
       const day = parseInt(matchMMDD[2], 10);
-      const year = 2025; // Año fijo 2025
+      const year = 2026;
       fecha = new Date(year, month, day);
-      
+
       // Validar que la fecha sea válida
-      if (isNaN(fecha.getTime()) || 
-          fecha.getDate() !== day || 
-          fecha.getMonth() !== month || 
-          fecha.getFullYear() !== year) {
+      if (isNaN(fecha.getTime()) ||
+        fecha.getDate() !== day ||
+        fecha.getMonth() !== month ||
+        fecha.getFullYear() !== year) {
         throw new Error('Fecha inválida');
       }
-      
+
       if (index < 3) {
         console.log(`[Banco Bogotá] Fila ${index + 1} - Fecha parseada (MM/DD, año 2025):`, fecha);
       }
@@ -675,7 +675,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
       // Formato dd/mm/yyyy
       const datePattern1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
       const match1 = fechaStrClean.match(datePattern1);
-      
+
       if (match1) {
         const day = parseInt(match1[1], 10);
         const month = parseInt(match1[2], 10) - 1; // Mes es 0-indexed
@@ -688,7 +688,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
         // Formato yyyy-mm-dd
         const datePattern2 = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
         const match2 = fechaStrClean.match(datePattern2);
-        
+
         if (match2) {
           const year = parseInt(match2[1], 10);
           const month = parseInt(match2[2], 10) - 1;
@@ -706,7 +706,7 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
         }
       }
     }
-    
+
     if (isNaN(fecha.getTime())) {
       if (index < 3) {
         console.log(`[Banco Bogotá] Fila ${index + 1} rechazada: Fecha inválida "${fechaStrClean}"`);
@@ -727,26 +727,26 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     if (!valueStr || valueStr.trim() === '') {
       return 0;
     }
-    
+
     // Limpiar: eliminar comillas y espacios
     let cleaned = valueStr.replace(/['"]/g, '').trim();
-    
+
     // Si está vacío después de limpiar, retornar 0
     if (cleaned === '') {
       return 0;
     }
-    
+
     // El formato puede ser con punto decimal (ej: "385.00")
     // Parsear directamente con parseFloat
     const parsed = parseFloat(cleaned) || 0;
-    
+
     if (index < 3) {
       console.log(`[Banco Bogotá] Fila ${index + 1} - Valor original: "${valueStr}", Limpiado: "${cleaned}", Parseado: ${parsed}`);
     }
-    
+
     return parsed;
   };
-  
+
   const debito = parseMonetaryValue(debitoStr);
   const credito = parseMonetaryValue(creditoStr);
 
@@ -780,10 +780,10 @@ function parseBancoBogotaRow(row: any, index: number, bankType: BankType = 'banc
     descripcion: transaccion || '', // Usar transacción como descripción
     originalIndex: index,
   };
-  
+
   // Marcar si es un gasto bancario
   transaction.isBankExpense = isBankExpense(transaction, bankType);
-  
+
   return transaction;
 }
 
@@ -823,7 +823,7 @@ export async function parseExcelBank(file: File, bankType: BankType): Promise<Ba
  */
 async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> {
   const errors: string[] = [];
-  
+
   try {
     // Convertir File a ArrayBuffer
     let arrayBuffer: ArrayBuffer;
@@ -834,7 +834,7 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     const data = new Uint8Array(arrayBuffer);
     let workbook: XLSX.WorkBook;
     try {
@@ -844,23 +844,23 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
       const errorMsg = 'El archivo Excel no contiene hojas. Verifica que el archivo tenga al menos una hoja con datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Obtener la primera hoja
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    
+
     if (!worksheet) {
       const errorMsg = `No se pudo leer la hoja "${firstSheetName}". Verifica que la hoja contenga datos.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Convertir a JSON - leer TODAS las filas sin límite
     // Usar range para asegurar que lea todas las celdas
     const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
@@ -868,62 +868,62 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
     console.log('Rango de la hoja:', worksheet['!ref']);
     console.log('Última fila según rango:', range.e.r + 1);
     console.log('Última columna según rango:', range.e.c + 1);
-    
+
     // Leer todas las filas, incluyendo las vacías al final
     // raw: true para mantener las fechas como están (no convertirlas automáticamente)
     // Esto es importante porque las fechas vienen como "2025/12/30" y queremos mantener ese formato
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-      header: 1, 
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1,
       defval: '',
       blankrows: true, // Incluir filas vacías
       raw: true // Mantener valores raw para fechas (no convertir automáticamente)
     });
-    
+
     if (!jsonData || jsonData.length === 0) {
       const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     console.log('Total de filas leídas por XLSX:', jsonData.length);
     console.log('Primeras 3 filas:', jsonData.slice(0, 3));
     console.log('Últimas 3 filas:', jsonData.slice(-3));
-    
+
     const transactions: BankTransaction[] = [];
-    
+
     // Los datos comienzan en la fila 7 (índice 6)
     const startRowIndex = 6;
-    
+
     if (jsonData.length <= startRowIndex) {
       const errorMsg = `El archivo Excel no tiene suficientes filas. Se esperaba que los datos comenzaran en la fila 7 (índice ${startRowIndex}), pero el archivo solo tiene ${jsonData.length} filas.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Procesar filas de datos (empezar desde la fila 7)
     let rowsProcessed = 0;
     let rowsRejected = 0;
     let emptyRowsSkipped = 0;
     let lastValidRowIndex = -1;
-    
+
     // Procesar todas las filas hasta encontrar filas completamente vacías consecutivas
     // Si encontramos 10 filas vacías consecutivas, asumimos que terminó el archivo
     let consecutiveEmptyRows = 0;
     const maxConsecutiveEmptyRows = 10;
-    
+
     for (let i = startRowIndex; i < jsonData.length; i++) {
       const row = jsonData[i] as any[];
-      
+
       // Verificar si la fila está completamente vacía
-      const isRowEmpty = !Array.isArray(row) || row.length === 0 || 
-                        row.every(cell => cell === null || cell === undefined || 
-                        (typeof cell === 'string' && cell.trim() === '') ||
-                        cell === '');
-      
+      const isRowEmpty = !Array.isArray(row) || row.length === 0 ||
+        row.every(cell => cell === null || cell === undefined ||
+          (typeof cell === 'string' && cell.trim() === '') ||
+          cell === '');
+
       if (isRowEmpty) {
         consecutiveEmptyRows++;
         emptyRowsSkipped++;
-        
+
         // Si encontramos muchas filas vacías consecutivas, podríamos haber llegado al final
         // Pero continuamos procesando por si hay más datos después
         if (consecutiveEmptyRows >= maxConsecutiveEmptyRows && lastValidRowIndex >= 0) {
@@ -932,20 +932,20 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
         }
         continue;
       }
-      
+
       // Resetear contador de filas vacías si encontramos una fila con datos
       consecutiveEmptyRows = 0;
       rowsProcessed++;
-      
+
       // Usar la función parseBancoOccidenteRow que ya existe
       // Ajustar el índice para que sea relativo a las filas de datos (empezando desde 0)
       const adjustedIndex = i - startRowIndex;
       const transaction = parseBancoOccidenteRow(row, adjustedIndex, 'banco_occidente');
-      
+
       if (transaction) {
         transactions.push(transaction);
         lastValidRowIndex = i;
-        
+
         // Log cada 100 transacciones para monitorear el progreso
         if (transactions.length % 100 === 0) {
           console.log(`[Banco Occidente] Procesadas ${transactions.length} transacciones válidas hasta la fila ${i + 1}`);
@@ -965,7 +965,7 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
         }
       }
     }
-    
+
     console.log('=== RESUMEN BANCO OCCIDENTE ===');
     console.log('Total de filas en el archivo:', jsonData.length);
     console.log('Fila de inicio (índice):', startRowIndex);
@@ -975,7 +975,7 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
     console.log('Filas rechazadas (formato inválido):', rowsRejected);
     console.log('Transacciones válidas:', transactions.length);
     console.log('Última fila válida encontrada:', lastValidRowIndex >= 0 ? lastValidRowIndex + 1 : 'N/A');
-    
+
     if (transactions.length === 0) {
       let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel de Banco de Occidente.';
       if (errors.length > 0) {
@@ -987,11 +987,11 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     if (errors.length > 0) {
       console.warn('Advertencias al procesar Banco de Occidente:', errors);
     }
-    
+
     return transactions;
   } catch (error) {
     const errorMessage = `Error al parsear Excel de Banco de Occidente: ${error instanceof Error ? error.message : 'Error desconocido'}`;
@@ -1009,7 +1009,7 @@ async function parseExcelBancoOccidente(file: File): Promise<BankTransaction[]> 
  */
 async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
   const errors: string[] = [];
-  
+
   try {
     // Convertir File a ArrayBuffer
     let arrayBuffer: ArrayBuffer;
@@ -1020,7 +1020,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     const data = new Uint8Array(arrayBuffer);
     let workbook: XLSX.WorkBook;
     try {
@@ -1030,37 +1030,37 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
       const errorMsg = 'El archivo Excel no contiene hojas. Verifica que el archivo tenga al menos una hoja con datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Obtener la primera hoja
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    
+
     if (!worksheet) {
       const errorMsg = `No se pudo leer la hoja "${firstSheetName}". Verifica que la hoja contenga datos.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Convertir a JSON
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-    
+
     if (!jsonData || jsonData.length === 0) {
       const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     console.log('=== PARSE EXCEL DAVIVIENDA ===');
     console.log('Total de filas:', jsonData.length);
-    
+
     const transactions: BankTransaction[] = [];
-    
+
     // Buscar la fila de encabezados (buscar "Fecha de Sistema" u otros nombres de columnas)
     let headerRowIndex = -1;
     for (let i = 0; i < Math.min(10, jsonData.length); i++) {
@@ -1077,20 +1077,20 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         if (headerRowIndex !== -1) break;
       }
     }
-    
+
     if (headerRowIndex === -1) {
       const errorMsg = `No se encontró la fila de encabezados en el archivo Excel de Davivienda. Se esperaba encontrar una fila que contenga "Fecha de Sistema" o "Valor Total" en las primeras 10 filas.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Obtener los encabezados (cada celda es una columna)
     const headerRow = jsonData[headerRowIndex] as any[];
     const headerColumns: string[] = headerRow.map(cell => String(cell || '').trim());
-    
+
     console.log('Encabezados encontrados:', headerColumns);
     console.log('Número de columnas:', headerColumns.length);
-    
+
     // Mapear nombres de columnas a índices (búsqueda flexible)
     const getColumnIndex = (searchTerms: string[]): number => {
       for (const term of searchTerms) {
@@ -1103,14 +1103,14 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       }
       return -1;
     };
-    
+
     const fechaIndex = getColumnIndex(['Fecha de Sistema', 'Fecha', 'fecha']);
     const documentoIndex = getColumnIndex(['Documento', 'documento']);
     const descripcionIndex = getColumnIndex(['Descripción motivo', 'Descripción', 'descripcion motivo', 'descripcion']);
     const transaccionIndex = getColumnIndex(['Transacción', 'Transaccion', 'transacción', 'transaccion']);
     const oficinaIndex = getColumnIndex(['Oficina de Recaudo', 'Oficina', 'oficina de recaudo', 'oficina']);
     const valorTotalIndex = getColumnIndex(['Valor Total', 'valor total', 'Valor', 'valor']);
-    
+
     console.log('Índices de columnas:', {
       fecha: fechaIndex,
       documento: documentoIndex,
@@ -1119,29 +1119,29 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       oficina: oficinaIndex,
       valorTotal: valorTotalIndex
     });
-    
+
     if (fechaIndex === -1 || valorTotalIndex === -1) {
       const errorMsg = `No se encontraron las columnas requeridas. Se esperaba "Fecha de Sistema" y "Valor Total".`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Procesar filas de datos
     let rowsProcessed = 0;
     let rowsRejected = 0;
-    
+
     // Variable para logging (índice relativo a filas de datos)
     let dataRowIndex = 0;
-    
+
     for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
       const row = jsonData[i] as any[];
       if (!Array.isArray(row) || row.length === 0) {
         continue;
       }
-      
+
       rowsProcessed++;
       dataRowIndex++;
-      
+
       // Extraer valores
       const fechaValue = row[fechaIndex];
       const documento = String(row[documentoIndex] || '').trim();
@@ -1149,7 +1149,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       const transaccion = String(row[transaccionIndex] || '').trim();
       const oficina = String(row[oficinaIndex] || '').trim();
       const valorTotalValue = row[valorTotalIndex];
-      
+
       // Validar fecha
       if (!fechaValue) {
         rowsRejected++;
@@ -1158,7 +1158,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         }
         continue;
       }
-      
+
       // Parsear fecha (formato dd/mm/yyyy en Davivienda)
       let fecha: Date;
       try {
@@ -1171,22 +1171,22 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         } else {
           // Intentar parsear como string en formato dd/mm/yyyy
           const fechaStr = String(fechaValue).trim();
-          
+
           // Formato dd/mm/yyyy
           const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
           const match = fechaStr.match(datePattern);
-          
+
           if (match) {
             const day = parseInt(match[1], 10);
             const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed
             const year = parseInt(match[3], 10);
             fecha = new Date(year, month, day);
-            
+
             // Validar que la fecha sea válida
-            if (isNaN(fecha.getTime()) || 
-                fecha.getDate() !== day || 
-                fecha.getMonth() !== month || 
-                fecha.getFullYear() !== year) {
+            if (isNaN(fecha.getTime()) ||
+              fecha.getDate() !== day ||
+              fecha.getMonth() !== month ||
+              fecha.getFullYear() !== year) {
               throw new Error('Fecha inválida');
             }
           } else {
@@ -1197,7 +1197,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
             }
           }
         }
-        
+
         if (isNaN(fecha.getTime())) {
           throw new Error('Fecha inválida');
         }
@@ -1208,7 +1208,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         }
         continue;
       }
-      
+
       // Parsear valor total (ya viene con su naturaleza)
       // Formato: "$ 111.827,59" donde punto es miles y coma es decimal
       // Limpiar: eliminar espacios, signos de peso ($), puntos (miles) y convertir coma (decimal) a punto
@@ -1219,26 +1219,26 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         } else {
           // Limpiar el valor: formato "$ 111.827,59"
           let valorStr = String(valorTotalValue || '0').trim();
-          
+
           if (dataRowIndex < 3) {
             console.log(`[Davivienda] Fila ${i + 1} - Valor original: "${valorTotalValue}"`);
           }
-          
+
           // Eliminar espacios
           valorStr = valorStr.replace(/\s+/g, '');
-          
+
           // Eliminar signos de peso ($)
           valorStr = valorStr.replace(/\$/g, '');
-          
+
           // Eliminar puntos (separadores de miles)
           valorStr = valorStr.replace(/\./g, '');
-          
+
           // Reemplazar coma (separador decimal) por punto para parseFloat
           valorStr = valorStr.replace(/,/g, '.');
-          
+
           // Parsear el valor
           valor = parseFloat(valorStr) || 0;
-          
+
           if (dataRowIndex < 3) {
             console.log(`[Davivienda] Fila ${i + 1} - Limpiado: "${valorStr}", Parseado: ${valor}`);
           }
@@ -1250,7 +1250,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         }
         continue;
       }
-      
+
       // Validar que tenga valor
       if (valor === 0) {
         rowsRejected++;
@@ -1259,10 +1259,10 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         }
         continue;
       }
-      
+
       // Combinar descripción y transacción
       const descripcionCompleta = [descripcion, transaccion].filter(s => s).join(' - ') || '';
-      
+
       const transaction: BankTransaction = {
         cuenta: oficina || '',
         iniciales: '',
@@ -1272,18 +1272,18 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
         descripcion: descripcionCompleta || 'Sin descripción',
         originalIndex: i - headerRowIndex - 1, // Índice relativo a las filas de datos
       };
-      
+
       // Marcar si es un gasto bancario
       transaction.isBankExpense = isBankExpense(transaction, 'davivienda');
-      
+
       transactions.push(transaction);
     }
-    
+
     console.log('=== RESUMEN DAVIVIENDA ===');
     console.log('Filas procesadas:', rowsProcessed);
     console.log('Filas rechazadas:', rowsRejected);
     console.log('Transacciones válidas:', transactions.length);
-    
+
     if (transactions.length === 0) {
       let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel de Davivienda.';
       if (errors.length > 0) {
@@ -1295,11 +1295,11 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     if (errors.length > 0) {
       console.warn('Advertencias al procesar Davivienda:', errors);
     }
-    
+
     return transactions;
   } catch (error) {
     const errorMessage = `Error al parsear Excel de Davivienda: ${error instanceof Error ? error.message : 'Error desconocido'}`;
@@ -1316,7 +1316,7 @@ async function parseExcelDavivienda(file: File): Promise<BankTransaction[]> {
  */
 export async function parseExcel(file: File): Promise<ERPTransaction[]> {
   const errors: string[] = [];
-  
+
   try {
     // Convertir File a ArrayBuffer para usar en Node.js
     let arrayBuffer: ArrayBuffer;
@@ -1327,7 +1327,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     const data = new Uint8Array(arrayBuffer);
     let workbook: XLSX.WorkBook;
     try {
@@ -1337,34 +1337,34 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       console.error(errorMsg, error);
       throw new Error(errorMsg);
     }
-    
+
     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
       const errorMsg = 'El archivo Excel no contiene hojas. Verifica que el archivo tenga al menos una hoja con datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Obtener la primera hoja
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
-    
+
     if (!worksheet) {
       const errorMsg = `No se pudo leer la hoja "${firstSheetName}". Verifica que la hoja contenga datos.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Convertir a JSON
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-    
+
     if (!jsonData || jsonData.length === 0) {
       const errorMsg = 'El archivo Excel está vacío. Verifica que contenga datos.';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     const transactions: ERPTransaction[] = [];
-    
+
     // Buscar la fila de encabezados
     let headerRowIndex = -1;
     let headerRowContent = '';
@@ -1379,17 +1379,17 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         }
       }
     }
-    
+
     if (headerRowIndex === -1) {
       const errorMsg = `No se encontró la fila de encabezados en el archivo Excel. Se esperaba encontrar una fila que contenga "/" o "Código contable" en las primeras 10 filas. Verifica que el formato del archivo sea correcto.`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Obtener los encabezados para entender la estructura
     const headerRow = jsonData[headerRowIndex] as any[];
     let headerColumns: string[] = [];
-    
+
     // Si el encabezado está en una celda con "/", dividirlo
     if (Array.isArray(headerRow) && headerRow.length > 0) {
       const firstHeaderCell = String(headerRow[0] || '').trim();
@@ -1400,28 +1400,28 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         headerColumns = headerRow.map(cell => String(cell || '').trim());
       }
     }
-    
+
     console.log('Encabezados encontrados:', headerColumns);
     console.log('Número de columnas en encabezado:', headerColumns.length);
-    
+
     // Procesar filas de datos (empezar después de los encabezados)
     let rowsWithErrors = 0;
     let rowsWithInsufficientColumns = 0;
     let rowsWithInvalidDate = 0;
-    
+
     for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
       const row = jsonData[i] as any[];
       if (!Array.isArray(row) || row.length === 0) {
         continue;
       }
-      
+
       // Leer todas las columnas de la fila directamente
       // Cada columna del Excel corresponde a una posición en el array
       const dataRow: (string | Date)[] = [];
-      
+
       for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
         const cell = row[cellIndex];
-        
+
         // Si es la columna de fecha (índice 4), manejar especialmente
         if (cellIndex === 4) {
           // Si es un número serial de Excel (fecha), convertirla
@@ -1440,7 +1440,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
             continue;
           }
         }
-        
+
         // Si la celda es un objeto, intentar obtener el valor como string
         if (cell && typeof cell === 'object' && !(cell instanceof Date)) {
           dataRow.push(String(cell.w || cell.v || cell || '').trim());
@@ -1448,7 +1448,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
           dataRow.push(String(cell || '').trim());
         }
       }
-      
+
       // Validar que tengamos suficientes columnas
       if (dataRow.length < 14) {
         rowsWithInsufficientColumns++;
@@ -1457,7 +1457,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         }
         continue;
       }
-      
+
       // Extraer las columnas según los índices esperados
       // Índices: 0=Código contable, 1=Cuenta contable, 2=Comprobante, 3=Secuencia, 4=Fecha elaboración, 
       // 5=Identificación, 6=Sucursal, 7=Nombre del tercero, 8=Descripción, 9=Detalle, 
@@ -1467,7 +1467,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       const nombreTercero = String(dataRow[7] || '').trim();
       const debitoStr = String(dataRow[12] || '0').trim();
       const creditoStr = String(dataRow[13] || '0').trim();
-      
+
       // Validar campos esenciales
       if (!fechaElaboracionValue) {
         rowsWithErrors++;
@@ -1476,7 +1476,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         }
         continue;
       }
-      
+
       // Parsear fecha (formato esperado: dd/mm/yyyy o Date object)
       let fechaElaboracion: Date;
       try {
@@ -1486,22 +1486,22 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         } else {
           // Convertir a string para parsear
           const fechaElaboracionStr = String(fechaElaboracionValue).trim();
-          
+
           // Primero intentar parsear formato dd/mm/yyyy
           const datePattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
           const match = fechaElaboracionStr.match(datePattern);
-          
+
           if (match) {
             const day = parseInt(match[1], 10);
             const month = parseInt(match[2], 10) - 1; // Mes es 0-indexed en JavaScript
             const year = parseInt(match[3], 10);
             fechaElaboracion = new Date(year, month, day);
-            
+
             // Validar que la fecha sea válida
-            if (isNaN(fechaElaboracion.getTime()) || 
-                fechaElaboracion.getDate() !== day || 
-                fechaElaboracion.getMonth() !== month || 
-                fechaElaboracion.getFullYear() !== year) {
+            if (isNaN(fechaElaboracion.getTime()) ||
+              fechaElaboracion.getDate() !== day ||
+              fechaElaboracion.getMonth() !== month ||
+              fechaElaboracion.getFullYear() !== year) {
               throw new Error('Fecha inválida');
             }
           } else {
@@ -1526,21 +1526,21 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       } catch (error) {
         rowsWithInvalidDate++;
         if (rowsWithInvalidDate <= 3) {
-          const fechaStr = fechaElaboracionValue instanceof Date 
+          const fechaStr = fechaElaboracionValue instanceof Date
             ? fechaElaboracionValue.toLocaleDateString('es-ES')
             : String(fechaElaboracionValue);
           errors.push(`Fila ${i + 1}: Fecha inválida "${fechaStr}". Se espera formato dd/mm/yyyy.`);
         }
         continue; // Error al parsear fecha
       }
-      
+
       // Parsear Débito y Crédito
       const debito = parseFloat(String(debitoStr).replace(/,/g, '')) || 0;
       const credito = parseFloat(String(creditoStr).replace(/,/g, '')) || 0;
-      
+
       // Calcular Valor = Débito - Crédito
       const valor = debito - credito;
-      
+
       transactions.push({
         fechaElaboracion,
         comprobante,
@@ -1551,7 +1551,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
         originalIndex: i,
       });
     }
-    
+
     // Agregar resumen de errores si hay muchos
     if (rowsWithInsufficientColumns > 3) {
       errors.push(`... y ${rowsWithInsufficientColumns - 3} filas más con columnas insuficientes.`);
@@ -1562,7 +1562,7 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
     if (rowsWithErrors > 3) {
       errors.push(`... y ${rowsWithErrors - 3} filas más sin Fecha elaboración.`);
     }
-    
+
     // Si no se encontraron transacciones válidas, lanzar error con detalles
     if (transactions.length === 0) {
       let errorMsg = 'No se encontraron transacciones válidas en el archivo Excel.';
@@ -1577,12 +1577,12 @@ export async function parseExcel(file: File): Promise<ERPTransaction[]> {
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
-    
+
     // Si hay errores pero se encontraron algunas transacciones, solo mostrar advertencias
     if (errors.length > 0) {
       console.warn('Advertencias al procesar Excel:', errors);
     }
-    
+
     return transactions;
   } catch (error) {
     const errorMessage = `Error al parsear Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`;

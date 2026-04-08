@@ -155,7 +155,7 @@ REQUERIMIENTOS:
 4. Severidad: critical (diferencias grandes), high (pesos significativos), medium (centavos/pequeñas), low (redondeos/pagos distribuidos)
 
 CASOS ESPECIALES:
-- PSE/Pexto Colombia: Un pago bancario puede corresponder a múltiples pagos en ERP
+- PSE/Pexto Colombia: Un pago bancario puede corresponder a múltiples pagos en ERP por lo cual puedes determinar por ejemplo, que si del banco hay un pago de $100.000.000, pero en el ERP hay 10 pagos de $10.000.000, entonces el tipo de anomalía es "distributed_payment" y no hay severidad. Podrias indicar esos pagos (Dentro de los dos sistemas) en el detalle de la transacción.
 - Banco de Occidente: Movimientos grandes pueden ser lotes distribuidos en ERP
 - TRANSACCIONES DISTRIBUIDAS: Una transacción bancaria grande (ej: $100.000.000) puede dividirse en varios pagos en el ERP. Realiza análisis día a día y semana a semana para identificar patrones temporales y agrupar transacciones relacionadas por fecha.
 

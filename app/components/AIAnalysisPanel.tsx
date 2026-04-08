@@ -9,6 +9,8 @@ interface AIAnalysisPanelProps {
 }
 
 export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+
   if (!result.aiAnalysis) {
     return null;
   }
@@ -68,8 +70,6 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
       minimumFractionDigits: 2,
     }).format(value);
   };
-
-  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const handleDownloadPDF = async () => {
     if (!result.aiAnalysis) return;
@@ -161,8 +161,8 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
             'difference': 'Diferencia en Valores',
             'unmatched': 'Transacción No Conciliada',
             'unmatched_bank': 'Transacción Banco Sin Coincidencia',
-            'unmatched_erp': 'Transacción ERP Sin Coincidencia',
-            'distributed_payment': 'Pago Distribuido (Banco ↔ ERP)',
+            'unmatched_erp': 'Transaccion Contabilidad Sin Coincidencia',
+            'distributed_payment': 'Pago Distribuido (Banco ↔ Contabilidad)',
             'summary': 'Resumen'
           };
           const severityLabels: Record<string, string> = {
@@ -243,7 +243,7 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
               yPosition += 5;
             }
             if (trans.erpValue !== undefined) {
-              doc.text(`Valor ERP: ${formatCurrency(trans.erpValue)}`, margin, yPosition);
+              doc.text(`Valor Contabilidad: ${formatCurrency(trans.erpValue)}`, margin, yPosition);
               yPosition += 5;
             }
             if (trans.difference !== undefined) {
@@ -470,8 +470,8 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
                           {deviation.type === 'difference' && 'Diferencia en Valores'}
                           {deviation.type === 'unmatched' && 'Transacción No Conciliada'}
                           {deviation.type === 'unmatched_bank' && 'Transacción Banco Sin Coincidencia'}
-                          {deviation.type === 'unmatched_erp' && 'Transacción ERP Sin Coincidencia'}
-                          {deviation.type === 'distributed_payment' && 'Pago Distribuido (Banco ↔ ERP)'}
+                          {deviation.type === 'unmatched_erp' && 'Transaccion Contabilidad Sin Coincidencia'}
+                          {deviation.type === 'distributed_payment' && 'Pago Distribuido (Banco ↔ Contabilidad)'}
                           {deviation.type === 'summary' && 'Resumen'}
                         </span>
                         {deviation.count !== undefined && (
@@ -510,7 +510,7 @@ export default function AIAnalysisPanel({ result }: AIAnalysisPanelProps) {
                           )}
                           {deviation.details.transaction.erpValue !== undefined && (
                             <div>
-                              <span className="font-medium">Valor ERP:</span>{' '}
+                              <span className="font-medium">Valor Contabilidad:</span>{' '}
                               {formatCurrency(deviation.details.transaction.erpValue)}
                             </div>
                           )}

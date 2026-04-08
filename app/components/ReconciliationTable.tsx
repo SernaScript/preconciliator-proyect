@@ -17,7 +17,7 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
   const tabs = [
     { id: 'matched' as const, label: 'Conciliados', count: result.matched.length, color: 'green' },
     { id: 'unmatchedBank' as const, label: 'Pendientes Banco', count: result.unmatchedBank.length, color: 'orange' },
-    { id: 'unmatchedERP' as const, label: 'Pendientes ERP', count: result.unmatchedERP.length, color: 'red' },
+    { id: 'unmatchedERP' as const, label: 'Pendientes Contabilidad', count: result.unmatchedERP.length, color: 'red' },
     { id: 'bankExpenses' as const, label: 'Gastos Bancarios', count: result.bankExpenses.length, color: 'indigo' },
   ];
 
@@ -101,13 +101,13 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
                   Descripción Banco
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Fecha ERP
+                  Fecha Contabilidad
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Valor ERP
+                  Valor Contabilidad
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tercero ERP
+                  Tercero Contabilidad
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Diferencia
@@ -235,7 +235,7 @@ export default function ReconciliationTable({ result }: ReconciliationTableProps
               {result.unmatchedERP.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    No hay transacciones pendientes del ERP
+                    No hay transacciones pendientes de Contabilidad
                   </td>
                 </tr>
               ) : (

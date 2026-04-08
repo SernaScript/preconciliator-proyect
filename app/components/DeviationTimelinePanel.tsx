@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { ReconciliationResult } from '@/app/lib/reconciliation';
-import { BankTransaction, ERPTransaction } from '@/app/lib/fileParser';
 
 interface DeviationTimelinePanelProps {
   result: ReconciliationResult;
@@ -40,6 +39,11 @@ interface WeekDeviation {
 
 export default function DeviationTimelinePanel({ result }: DeviationTimelinePanelProps) {
   const [downloading, setDownloading] = useState(false);
+  const [showWeekView, setShowWeekView] = useState(false);
+  const [showDayView, setShowDayView] = useState(false);
+  
+  // Verificar si es Banco de Occidente (donde débito=salida, crédito=entrada)
+  const isBancoOccidente = result.meta?.bankType === 'banco_occidente';
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -96,6 +100,9 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
   const dayDeviations = new Map<string, DayDeviation>();
 
   // Procesar TODAS las transacciones del banco (conciliadas + no conciliadas)
+  // Para Banco de Occidente: débito=salida (negativo), crédito=entrada (positivo)
+  // Para otros bancos: valor negativo=salida, valor positivo=entrada
+  
   // Primero las conciliadas
   result.matched.forEach((match) => {
     const trans = match.bankTransaction;
@@ -117,10 +124,12 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
       });
     }
     const day = dayDeviations.get(dateKey)!;
+    // Para Banco de Occidente: valor negativo = débito (salida), valor positivo = crédito (entrada)
+    // Para otros bancos: valor negativo = salida, valor positivo = entrada
     if (trans.valor < 0) {
-      day.bankDebits += Math.abs(trans.valor);
+      day.bankDebits += Math.abs(trans.valor); // Salidas
     } else {
-      day.bankCredits += trans.valor;
+      day.bankCredits += trans.valor; // Entradas
     }
     // Agregar diferencia si existe
     if (match.difference > 0) {
@@ -149,15 +158,18 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
     }
     const day = dayDeviations.get(dateKey)!;
     if (trans.valor < 0) {
-      day.bankDebits += Math.abs(trans.valor);
+      day.bankDebits += Math.abs(trans.valor); // Salidas
     } else {
-      day.bankCredits += trans.valor;
+      day.bankCredits += trans.valor; // Entradas
     }
     day.unmatchedBankCount++;
     day.unmatchedBankTotal += Math.abs(trans.valor);
   });
 
   // Procesar TODAS las transacciones del ERP (conciliadas + no conciliadas)
+  // En el ERP: débito=entrada (positivo), crédito=salida (positivo en el campo, pero negativo en valor neto)
+  // Usamos directamente los campos debito y credito del ERP
+  
   // Primero las conciliadas
   result.matched.forEach((match) => {
     const trans = match.erpTransaction;
@@ -179,11 +191,9 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
       });
     }
     const day = dayDeviations.get(dateKey)!;
-    if (trans.valor < 0) {
-      day.erpDebits += Math.abs(trans.valor);
-    } else {
-      day.erpCredits += trans.valor;
-    }
+    // En ERP: debito = entrada (positivo), credito = salida (positivo en el campo)
+    day.erpDebits += trans.debito; // Entradas
+    day.erpCredits += trans.credito; // Salidas
   });
 
   // Luego las no conciliadas del ERP
@@ -206,11 +216,9 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
       });
     }
     const day = dayDeviations.get(dateKey)!;
-    if (trans.valor < 0) {
-      day.erpDebits += Math.abs(trans.valor);
-    } else {
-      day.erpCredits += trans.valor;
-    }
+    // En ERP: debito = entrada (positivo), credito = salida (positivo en el campo)
+    day.erpDebits += trans.debito; // Entradas
+    day.erpCredits += trans.credito; // Salidas
     day.unmatchedERPCount++;
     day.unmatchedERPTotal += Math.abs(trans.valor);
   });
@@ -282,6 +290,24 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
     (a, b) => new Date(a.weekStart).getTime() - new Date(b.weekStart).getTime()
   );
 
+  const topDifferenceDay = dayDeviationsArray.reduce<DayDeviation | null>(
+    (max, day) => (max === null || day.totalDifference > max.totalDifference ? day : max),
+    null
+  );
+
+  const totalPendingAmount =
+    dayDeviationsArray.reduce((sum, day) => sum + day.unmatchedBankTotal + day.unmatchedERPTotal, 0);
+
+  const formatCompactCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      notation: 'compact',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    }).format(value);
+  };
+
   const getSeverityColor = (difference: number) => {
     if (difference === 0) return 'bg-green-50 border-green-200';
     if (difference < 100000) return 'bg-blue-50 border-blue-200';
@@ -339,8 +365,8 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
           'Débito ERP': week.erpDebits,
           'Crédito Banco': week.bankCredits,
           'Crédito ERP': week.erpCredits,
-          'Diferencia Débito': week.bankDebits - week.erpDebits,
-          'Diferencia Crédito': week.bankCredits - week.erpCredits,
+          'Diferencia Débito': isBancoOccidente ? week.bankDebits - week.erpCredits : week.bankDebits - week.erpDebits,
+          'Diferencia Crédito': isBancoOccidente ? week.bankCredits - week.erpDebits : week.bankCredits - week.erpCredits,
           'Pendientes Banco': week.unmatchedBankTotal,
           'Pendientes ERP': week.unmatchedERPTotal,
           'Cantidad Banco': week.unmatchedBankCount,
@@ -355,8 +381,8 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
           'Débito ERP': day.erpDebits,
           'Crédito Banco': day.bankCredits,
           'Crédito ERP': day.erpCredits,
-          'Diferencia Débito': day.bankDebits - day.erpDebits,
-          'Diferencia Crédito': day.bankCredits - day.erpCredits,
+          'Diferencia Débito': isBancoOccidente ? day.bankDebits - day.erpCredits : day.bankDebits - day.erpDebits,
+          'Diferencia Crédito': isBancoOccidente ? day.bankCredits - day.erpDebits : day.bankCredits - day.erpCredits,
           'Pendientes Banco': day.unmatchedBankTotal,
           'Pendientes ERP': day.unmatchedERPTotal,
           'Cantidad Banco': day.unmatchedBankCount,
@@ -513,30 +539,83 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
       </div>
 
       <div className="p-6 space-y-6">
+        {/* Resumen rápido */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+            <p className="text-xs text-indigo-700">Dias analizados</p>
+            <p className="text-xl font-semibold text-indigo-900">{dayDeviationsArray.length}</p>
+          </div>
+          <div className="rounded-lg border border-purple-100 bg-purple-50 p-3">
+            <p className="text-xs text-purple-700">Semanas con movimiento</p>
+            <p className="text-xl font-semibold text-purple-900">{weekDeviationsArray.length}</p>
+          </div>
+          <div className="rounded-lg border border-orange-100 bg-orange-50 p-3">
+            <p className="text-xs text-orange-700">Mayor diferencia diaria</p>
+            <p className="text-base font-semibold text-orange-900">
+              {topDifferenceDay ? formatCurrency(topDifferenceDay.totalDifference) : formatCurrency(0)}
+            </p>
+            <p className="text-xs text-orange-700">
+              {topDifferenceDay ? topDifferenceDay.date : 'Sin datos'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs text-slate-600">Pendientes acumulados</p>
+            <p className="text-xl font-semibold text-slate-900">{formatCompactCurrency(totalPendingAmount)}</p>
+            <p className="text-xs text-slate-600">{formatCurrency(totalPendingAmount)}</p>
+          </div>
+        </div>
+
+        {/* Leyenda */}
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700">
+            <span className="font-semibold text-gray-800">Leyenda:</span>
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-blue-700">Banco</span>
+            <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-1 text-orange-700">Contabilidad</span>
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-green-700">Sin diferencia</span>
+            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-1 text-yellow-800">Diferencia baja</span>
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-1 text-red-700">Diferencia alta</span>
+          </div>
+        </div>
+
         {/* Vista por Semana */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowWeekView((prev) => !prev)}
+            className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+          >
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <svg
+                className="w-5 h-5 text-indigo-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              Vista por Semana
+            </h3>
             <svg
-              className="w-5 h-5 text-indigo-600"
+              className={`w-5 h-5 text-gray-500 transition-transform ${showWeekView ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-            Vista por Semana
-          </h3>
-          <div className="space-y-3">
-            {weekDeviationsArray.map((week, idx) => (
-              <div
-                key={idx}
-                className={`border rounded-lg p-4 ${getSeverityColor(week.totalDifference)}`}
-              >
+          </button>
+          {showWeekView && (
+            <div className="space-y-3 p-4">
+              {weekDeviationsArray.map((week, idx) => (
+                <div
+                  key={idx}
+                  className="border rounded-lg p-4 bg-white"
+                >
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h4 className="font-semibold text-gray-800">
@@ -548,36 +627,71 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
                   </div>
                   <div className="text-right text-sm">
                     <div className="text-gray-600">
-                      Banco: {week.unmatchedBankCount} | ERP: {week.unmatchedERPCount}
+                      Banco: {week.unmatchedBankCount} | Contabilidad: {week.unmatchedERPCount}
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
-                  <div>
-                    <span className="text-gray-600">Débitos Banco:</span>
-                    <p className="font-semibold text-red-700">{formatCurrency(week.bankDebits)}</p>
+                {isBancoOccidente ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                    <div>
+                      <span className="text-gray-600">Créditos Banco:</span>
+                      <p className="font-semibold text-green-700">{formatCurrency(week.bankCredits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Debitos Contabilidad:</span>
+                      <p className="font-semibold text-red-700">{formatCurrency(week.erpDebits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Débitos Banco:</span>
+                      <p className="font-semibold text-red-700">{formatCurrency(week.bankDebits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Creditos Contabilidad:</span>
+                      <p className="font-semibold text-green-700">{formatCurrency(week.erpCredits)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Créditos Banco:</span>
-                    <p className="font-semibold text-green-700">{formatCurrency(week.bankCredits)}</p>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                    <div>
+                      <span className="text-gray-600">Débitos Banco:</span>
+                      <p className="font-semibold text-red-700">{formatCurrency(week.bankDebits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Debitos Contabilidad:</span>
+                      <p className="font-semibold text-red-700">{formatCurrency(week.erpDebits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Créditos Banco:</span>
+                      <p className="font-semibold text-green-700">{formatCurrency(week.bankCredits)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Creditos Contabilidad:</span>
+                      <p className="font-semibold text-green-700">{formatCurrency(week.erpCredits)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Débitos ERP:</span>
-                    <p className="font-semibold text-red-700">{formatCurrency(week.erpDebits)}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Créditos ERP:</span>
-                    <p className="font-semibold text-green-700">{formatCurrency(week.erpCredits)}</p>
-                  </div>
-                </div>
+                )}
                 <div className="grid grid-cols-2 gap-3 text-sm pb-3 border-b border-gray-300">
                   <div>
-                    <span className="text-gray-700 font-medium">Diferencia Débito:</span>
-                    <p className="font-bold text-orange-700">{formatCurrency(week.bankDebits - week.erpDebits)}</p>
+                    <span className="text-gray-700 font-medium">
+                      {isBancoOccidente ? 'Diferencia Entradas (Cred. Banco - Deb. Contabilidad):' : 'Diferencia Debito:'}
+                    </span>
+                    <p className="font-bold text-orange-700">
+                      {isBancoOccidente 
+                        ? formatCurrency(week.bankCredits - week.erpDebits) // Entradas: Crédito Banco vs Débito ERP
+                        : formatCurrency(week.bankDebits - week.erpDebits)
+                      }
+                    </p>
                   </div>
                   <div>
-                    <span className="text-gray-700 font-medium">Diferencia Crédito:</span>
-                    <p className="font-bold text-orange-700">{formatCurrency(week.bankCredits - week.erpCredits)}</p>
+                    <span className="text-gray-700 font-medium">
+                      {isBancoOccidente ? 'Diferencia Salidas (Deb. Banco - Cred. Contabilidad):' : 'Diferencia Credito:'}
+                    </span>
+                    <p className="font-bold text-orange-700">
+                      {isBancoOccidente 
+                        ? formatCurrency(week.bankDebits - week.erpCredits) // Salidas: Débito Banco vs Crédito ERP
+                        : formatCurrency(week.bankCredits - week.erpCredits)
+                      }
+                    </p>
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-300">
@@ -587,64 +701,105 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
                       <p className="font-bold text-gray-900">{formatCurrency(week.unmatchedBankTotal)}</p>
                     </div>
                     <div>
-                      <span className="text-gray-700 font-medium">Pendientes ERP:</span>
+                      <span className="text-gray-700 font-medium">Pendientes Contabilidad:</span>
                       <p className="font-bold text-gray-900">{formatCurrency(week.unmatchedERPTotal)}</p>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Vista por Día */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowDayView((prev) => !prev)}
+            className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+          >
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <svg
+                className="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              Vista por Dia
+            </h3>
             <svg
-              className="w-5 h-5 text-purple-600"
+              className={`w-5 h-5 text-gray-500 transition-transform ${showDayView ? 'rotate-180' : ''}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
-            Vista por Día
-          </h3>
-          <div className="overflow-x-auto">
+          </button>
+          {showDayView && (
+            <div className="overflow-x-auto rounded-lg border-t border-gray-200">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 sticky top-0 z-10">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 z-20 bg-gray-50">
                     Fecha
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Déb. Banco
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Déb. ERP
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Créd. Banco
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Créd. ERP
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dif. Déb.
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dif. Créd.
-                  </th>
+                  {isBancoOccidente ? (
+                    <>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-100">
+                        Créd. Banco
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-100">
+                        Deb. Contabilidad
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dif. Entradas
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-100">
+                        Déb. Banco
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-100">
+                        Cred. Contabilidad
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dif. Salidas
+                      </th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-100">
+                        Déb. Banco
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-100">
+                        Deb. Contabilidad
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dif. Déb.
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-100">
+                        Créd. Banco
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-orange-100">
+                        Cred. Contabilidad
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dif. Créd.
+                      </th>
+                    </>
+                  )}
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Pend. Banco
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pend. ERP
+                    Pend. Contabilidad
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Diferencia
@@ -658,37 +813,64 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
                 {dayDeviationsArray.map((day, idx) => (
                   <tr
                     key={idx}
-                    className={`hover:bg-gray-50 ${getSeverityColor(day.totalDifference)}`}
+                    className="hover:bg-gray-50 even:bg-gray-50/40"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white group-hover:bg-gray-50">
                       {day.date}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-red-700">
-                      {day.bankDebits > 0 ? formatCurrency(day.bankDebits) : '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-red-700">
-                      {day.erpDebits > 0 ? formatCurrency(day.erpDebits) : '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-green-700">
-                      {day.bankCredits > 0 ? formatCurrency(day.bankCredits) : '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-green-700">
-                      {day.erpCredits > 0 ? formatCurrency(day.erpCredits) : '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-700">
-                      {formatCurrency(day.bankDebits - day.erpDebits)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-700">
-                      {formatCurrency(day.bankCredits - day.erpCredits)}
-                    </td>
+                    {isBancoOccidente ? (
+                      <>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-semibold">
+                          {day.bankCredits > 0 ? formatCurrency(day.bankCredits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-semibold">
+                          {day.erpDebits > 0 ? formatCurrency(day.erpDebits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                          {formatCurrency(day.bankCredits - day.erpDebits)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-semibold">
+                          {day.bankDebits > 0 ? formatCurrency(day.bankDebits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-semibold">
+                          {day.erpCredits > 0 ? formatCurrency(day.erpCredits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                          {formatCurrency(day.bankDebits - day.erpCredits)}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-semibold">
+                          {day.bankDebits > 0 ? formatCurrency(day.bankDebits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-semibold">
+                          {day.erpDebits > 0 ? formatCurrency(day.erpDebits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                          {formatCurrency(day.bankDebits - day.erpDebits)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-semibold">
+                          {day.bankCredits > 0 ? formatCurrency(day.bankCredits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-semibold">
+                          {day.erpCredits > 0 ? formatCurrency(day.erpCredits) : '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                          {formatCurrency(day.bankCredits - day.erpCredits)}
+                        </td>
+                      </>
+                    )}
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">
                       {day.unmatchedBankTotal > 0 ? formatCurrency(day.unmatchedBankTotal) : '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700">
                       {day.unmatchedERPTotal > 0 ? formatCurrency(day.unmatchedERPTotal) : '-'}
                     </td>
-                    <td className={`px-4 py-3 whitespace-nowrap text-sm text-right font-semibold ${getSeverityText(day.totalDifference)}`}>
-                      {formatCurrency(day.totalDifference)}
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                      <span className={`inline-flex rounded-full px-2 py-1 font-semibold ${getSeverityText(day.totalDifference)} ${getSeverityColor(day.totalDifference)}`}>
+                        {formatCurrency(day.totalDifference)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-center text-gray-600">
                       <div className="flex flex-col gap-1">
@@ -705,27 +887,52 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
                 ))}
                 {/* Fila de Totales */}
                 <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
-                  <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900 sticky left-0 bg-gray-100">
                     TOTAL
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-red-700 font-bold">
-                    {formatCurrency(dayTotals.bankDebits)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-red-700 font-bold">
-                    {formatCurrency(dayTotals.erpDebits)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-green-700 font-bold">
-                    {formatCurrency(dayTotals.bankCredits)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-green-700 font-bold">
-                    {formatCurrency(dayTotals.erpCredits)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-700 font-bold">
-                    {formatCurrency(dayTotals.bankDebits - dayTotals.erpDebits)}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-orange-700 font-bold">
-                    {formatCurrency(dayTotals.bankCredits - dayTotals.erpCredits)}
-                  </td>
+                  {isBancoOccidente ? (
+                    <>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-bold">
+                        {formatCurrency(dayTotals.bankCredits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-bold">
+                        {formatCurrency(dayTotals.erpDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                        {formatCurrency(dayTotals.bankCredits - dayTotals.erpDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-bold">
+                        {formatCurrency(dayTotals.bankDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-bold">
+                        {formatCurrency(dayTotals.erpCredits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                        {formatCurrency(dayTotals.bankDebits - dayTotals.erpCredits)}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-bold">
+                        {formatCurrency(dayTotals.bankDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-bold">
+                        {formatCurrency(dayTotals.erpDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                        {formatCurrency(dayTotals.bankDebits - dayTotals.erpDebits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-blue-50 text-blue-900 font-bold">
+                        {formatCurrency(dayTotals.bankCredits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right bg-orange-50 text-orange-900 font-bold">
+                        {formatCurrency(dayTotals.erpCredits)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-bold text-gray-900">
+                        {formatCurrency(dayTotals.bankCredits - dayTotals.erpCredits)}
+                      </td>
+                    </>
+                  )}
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-700 font-bold">
                     {formatCurrency(dayTotals.unmatchedBankTotal)}
                   </td>
@@ -749,8 +956,9 @@ export default function DeviationTimelinePanel({ result }: DeviationTimelinePane
                 </tr>
               </tbody>
             </table>
+            </div>
+          )}
           </div>
-        </div>
       </div>
     </div>
   );

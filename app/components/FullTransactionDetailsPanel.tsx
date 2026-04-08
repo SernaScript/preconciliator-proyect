@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { ReconciliationResult } from '@/app/lib/reconciliation';
-import { BankTransaction, ERPTransaction } from '@/app/lib/fileParser';
 
 interface FullTransactionDetailsPanelProps {
   result: ReconciliationResult;
@@ -107,7 +106,7 @@ export default function FullTransactionDetailsPanel({ result }: FullTransactionD
               }
             `}
           >
-            Documentos ERP ({allERPTransactions.length})
+            Documentos Contabilidad ({allERPTransactions.length})
           </button>
         </nav>
       </div>
@@ -257,7 +256,7 @@ export default function FullTransactionDetailsPanel({ result }: FullTransactionD
           </div>
         )}
 
-        {/* Tab: Documentos ERP */}
+        {/* Tab: Documentos Contabilidad */}
         {activeTab === 'erp' && (
           <div>
             <div className="mb-4 flex gap-4 text-sm">
@@ -308,7 +307,7 @@ export default function FullTransactionDetailsPanel({ result }: FullTransactionD
                   {allERPTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
-                        No hay documentos ERP
+                        No hay documentos de Contabilidad
                       </td>
                     </tr>
                   ) : (

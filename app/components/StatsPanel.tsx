@@ -19,7 +19,7 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
     },
     {
-      label: 'Total ERP',
+      label: 'Total Contabilidad',
       value: stats.totalERP,
       color: 'text-purple-600 dark:text-purple-400',
       bgColor: 'bg-purple-50 dark:bg-purple-900/20',
@@ -37,7 +37,7 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       bgColor: 'bg-orange-50 dark:bg-orange-900/20',
     },
     {
-      label: 'Pendientes ERP',
+      label: 'Pendientes Contabilidad',
       value: stats.unmatchedERP,
       color: 'text-red-600 dark:text-red-400',
       bgColor: 'bg-red-50 dark:bg-red-900/20',
